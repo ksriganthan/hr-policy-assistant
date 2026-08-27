@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+.env.local
+
+# Daten & Indizes (nie committen)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/
+chroma/
+*.sqlite3
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
