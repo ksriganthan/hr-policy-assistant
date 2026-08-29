@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "RAG-System über öffentliche Schweizer HR-Dokumente (GAV, Personalreglemente) mit Quellenzitaten"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pdfplumber>=0.11.10",
+]
 
 [build-system]
 requires = ["hatchling"]
