@@ -1,7 +1,10 @@
-from pathlib import Path
+import re
 import unicodedata
+from pathlib import Path
+from collections import Counter
 
 import pdfplumber
+
 PROJEKT_WURZEL = Path(__file__).resolve().parents[3]
 
 # parents[0]  ingestion
@@ -9,25 +12,12 @@ PROJEKT_WURZEL = Path(__file__).resolve().parents[3]
 # parents[2]  src
 # parents[3]  D:\hr-policy-assistant     ← die Wurzel
 
-import re
-TOC_ZEILE = re.compile(r"^\d+(\.\d+)*\.?\s+.+\s+\d+\s*$")
-SEITENMARKE = re.compile(r"^.*Seite\s+\d+\s+von\s+\d+\s*$")
 
-# | ^ | Zeilenanfang |
-# | \d+ | eine oder mehrere Ziffern — die 2 in 2.3.3 |
-# | (\.\d+)* | beliebig oft «Punkt plus Ziffern» — die .3.3 |
-# | \.? | ein optionaler Punkt am Ende der Nummer — 1. |
-# | \s+ | Leerzeichen |
-# | .+ | der Titel, egal was |
-# | \s+\d+ | Leerzeichen und dann Ziffern — die Seitenzahl |
-# | \s*$ | Zeilenende, eventuell mit Leerzeichen davor |
-
-def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> str:
-    """Extrahiert den Text aller Seiten einer PDF als einen String.
-
-    ueberspringen: Seitenzahlen (1-basiert), die nicht gelesen werden.
+def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> list[str]:
+    """Extrahiert den Text jeder Seite einer PDF, eine Seite pro Listeneintrag.
+       ueberspringen: Seitenzahlen (1-basiert), die nicht gelesen werden.
     """
-    ueberspringen = ueberspringen or set()
+    ueberspringen = ueberspringen or set() #None oder eingegebener Wert
     seiten = []
 
     with pdfplumber.open(pfad) as pdf:
@@ -37,43 +27,60 @@ def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> str:
             text = page.extract_text()
             if text:
                 seiten.append(text)
-
-    return "\n".join(seiten)
+    return seiten
 
 def bereinige_text(text: str) -> str:
     """Normalisiert und säubert den rohen PDF-Text."""
     text = unicodedata.normalize("NFC", text)
 
-    """Entfernt die Wingdings-Aufzählungspunkte - Unsichtbare, unbedeutende Symbolzeichen im Text"""
+    # Wingdings-Aufzählungspunkte, Unicode-Kategorie Co, tragen keine Information
     text = "".join(z for z in text if unicodedata.category(z) != "Co")
     return text
 
-def entferne_toc(text: str) -> str:
-    """Wirft Inhaltsverzeichnis-Zeilen weg (Nummer + Titel + Seitenzahl)."""
-    zeilen = text.split("\n")
-    behalten = [z for z in zeilen if not TOC_ZEILE.match(z)]
-    return "\n".join(behalten)
 
-def entferne_seitenmarken(text: str) -> str:
-    """Wirft die auf jeder Seite wiederholte Seitenmarke weg."""
-    zeilen = text.split("\n")
-    behalten = [z for z in zeilen if not SEITENMARKE.match(z)]
-    return "\n".join(behalten)
+def signatur(zeile: str) -> str:
+    """ Form einer Zeile, jede Ziffernfolge wird durch '#' ersetzt.
+        Damit gelten 'GAV 1 / 26' und 'GAV 2 / 26' als dieselbe Zeile.
+        GAV 2 / 26'   →   'GAV # / #
+    """
+    return re.sub(r"\d+", "#", zeile).strip()
+
+
+def finde_wiederholte_zeilen(seiten: list[str], schwelle: float = 0.8) -> set[str]:
+    """Signaturen von Zeilen, die auf mindestens `schwelle` aller Seiten stehen.
+
+    Kopf- und Fusszeilen wiederholen sich auf fast jeder Seite, Regelungstext
+    nicht. Gemessen an den zwei GAV liegen Kopf- und Fusszeilen bei 95 bis 100
+    Prozent, die naechsthaeufige Zeile bei 10 Prozent.
+
+    Setzt ein Dokument mit genuegend Seiten voraus. Bei drei Seiten kann ein
+    normaler Satz, der auf zweien steht, die Schwelle reissen.
+    """
+    zaehler = Counter()
+    for text in seiten:
+        for sig in {signatur(z) for z in text.split("\n") if z.strip()}:
+            zaehler[sig] += 1
+
+    # 21 Seiten mal 0.8 ergibt 16.8. Alles ab 17 Seiten gilt als Kopf- oder Fusszeile
+    mindestens = schwelle * len(seiten)
+    return {sig for sig, anzahl in zaehler.items() if anzahl >= mindestens}
+
+
+def entferne_wiederholte_zeilen(seiten: list[str], signaturen: set[str]) -> list[str]:
+    """Entfernt aus jeder Seite die Zeilen, deren Signatur in `signaturen` steht."""
+    bereinigt = []
+    for text in seiten:
+        behalten = [z for z in text.split("\n") if signatur(z) not in signaturen]
+        bereinigt.append("\n".join(behalten))
+    return bereinigt
+
 
 if __name__ == "__main__":
     pfad = PROJEKT_WURZEL / "data" / "raw" / "gav_universitaetsspital_basel.pdf"
-    text = lade_pdf(pfad, ueberspringen={2, 3})
-    text = bereinige_text(text)
-    text = entferne_toc(text)
-    text = entferne_seitenmarken(text)
+    seiten = [bereinige_text(s) for s in lade_pdf(pfad, ueberspringen={2, 3})]
+    seiten = entferne_wiederholte_zeilen(seiten, finde_wiederholte_zeilen(seiten))
 
+    text = "\n".join(seiten)
     print("Kündigungsfrist" in text)
     print(text[:1500])
 
-
-    """
-    Einen Loader mit Seitenauswahl, Unicode-Normalisierung, Entfernung der Symbolzeichen, einen TOC-Filter und einen Seitenmarken-Filter.
-    Aus einem PDF, in dem Python das Wort «Kündigungsfrist» nicht finden konnte, ist sauberer Text geworden, in dem die Struktur erhalten ist.
-    Wichtiger als der Code: Du hast jeden Schritt an einer Zahl geprüft — 106 entfernte Zeilen, das verschwundene 1. Allgemeines, das True nach der Normalisierung.
-    Und du hast selbst gesehen, warum ein Seitenschnitt zu grob ist, statt es mir zu glauben.
-       """
