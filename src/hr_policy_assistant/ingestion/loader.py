@@ -1,8 +1,8 @@
 import re
 import unicodedata
-from pathlib import Path
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 
 import pdfplumber
 
@@ -13,6 +13,28 @@ PROJEKT_WURZEL = Path(__file__).resolve().parents[3]
 # parents[2]  src
 # parents[3]  D:\hr-policy-assistant     ← die Wurzel
 
+# Ueberschrift: mehrstufige Nummer mit optionalem Schlusspunkt (2.5.9 / 9.1.)
+# ODER einstufige mit Punkt (1.), danach Leerzeichen und ein Nicht-Ziffer-Zeichen.
+UEBERSCHRIFT = re.compile(r"^(\d+(\.\d+)+\.?|\d+\.)\s+\D")
+
+# Notbremse gegen Satzzeilen. Die laengste echte Ueberschrift hat 81 Zeichen.
+MAX_UEBERSCHRIFT = 100
+
+@dataclass
+class Seite:
+    """Eine Seite mit ihrer echten Seitenzahl."""
+
+    nummer: int
+    text: str
+
+@dataclass
+class Abschnitt:
+    """Ein Abschnitt des Dokuments, erkannt an seiner Gliederungsnummer."""
+    nummer: str
+    titel: str
+    text: str
+    seite: int = 0
+    pfad: str = ""
 
 def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> list[Seite]:
     """Extrahiert den Text jeder Seite einer PDF, eine Seite pro Listeneintrag.
@@ -51,7 +73,7 @@ def signatur(zeile: str) -> str:
     return re.sub(r"\d+", "#", zeile).strip()
 
 
-def finde_wiederholte_zeilen(seiten: list[str], schwelle: float = 0.8) -> set[str]:
+def finde_wiederholte_zeilen(seiten: list[Seite], schwelle: float = 0.8) -> set[str]:
     """Signaturen von Zeilen, die auf mindestens `schwelle` aller Seiten stehen.
 
     Kopf- und Fusszeilen wiederholen sich auf fast jeder Seite, Regelungstext
@@ -71,37 +93,13 @@ def finde_wiederholte_zeilen(seiten: list[str], schwelle: float = 0.8) -> set[st
     return {sig for sig, anzahl in zaehler.items() if anzahl >= mindestens}
 
 
-def entferne_wiederholte_zeilen(seiten: list[str], signaturen: set[str]) -> list[str]:
+def entferne_wiederholte_zeilen(seiten: list[Seite], signaturen: set[str]) -> list[Seite]:
     """Entfernt aus jeder Seite die Zeilen, deren Signatur in `signaturen` steht."""
     bereinigt = []
     for s in seiten:
         behalten = [z for z in s.text.split("\n") if signatur(z) not in signaturen]
         bereinigt.append(Seite(s.nummer, "\n".join(behalten)))
     return bereinigt
-
-# Ueberschrift: mehrstufige Nummer mit optionalem Schlusspunkt (2.5.9 / 9.1.)
-# ODER einstufige mit Punkt (1.), danach Leerzeichen und ein Nicht-Ziffer-Zeichen.
-UEBERSCHRIFT = re.compile(r"^(\d+(\.\d+)+\.?|\d+\.)\s+\D")
-
-# Notbremse gegen Satzzeilen. Die laengste echte Ueberschrift hat 81 Zeichen.
-MAX_UEBERSCHRIFT = 100
-
-@dataclass
-class Seite:
-    """Eine Seite mit ihrer echten Seitenzahl."""
-
-    nummer: int
-    text: str
-
-@dataclass
-class Abschnitt:
-    """Ein Abschnitt des Dokuments, erkannt an seiner Gliederungsnummer."""
-    nummer: str
-    titel: str
-    text: str
-    seite: int = 0
-    pfad: str = ""
-
 
 def nummer_von(zeile: str) -> str:
     """Die Gliederungsnummer am Zeilenanfang, ohne Schlusspunkt."""
@@ -133,10 +131,12 @@ def ist_ueberschrift(zeile: str) -> bool:
 def schneide_in_abschnitte(seiten: list[str]) -> list[Abschnitt]:
     """Schneidet den Text an jeder nummerierten Ueberschrift.
 
+    Vermerkt die Seite, auf der die Ueberschrift steht. Ein Abschnitt darf ueber
+    einen Seitenumbruch laufen, gespeichert wird die Seite seines Beginns.
     Zeilen vor der ersten Ueberschrift entfallen.
     """
     abschnitte: list[Abschnitt] = []
-    nummer, titel, zeilen = None, None, []
+    nummer, titel, seite, zeilen = None, None, 0, []
 
     for s in seiten:
         for zeile in s.text.split("\n"):
@@ -172,10 +172,9 @@ def setze_pfade(abschnitte: list[Abschnitt]) -> list[Abschnitt]:
 
 if __name__ == "__main__":
     pfad = PROJEKT_WURZEL / "data" / "raw" / "gav_universitaetsspital_basel.pdf"
-    seiten = [bereinige_text(s) for s in lade_pdf(pfad, ueberspringen={2, 3})]
+    seiten = bereinige_seiten(lade_pdf(pfad, ueberspringen={1, 2, 3}))
     seiten = entferne_wiederholte_zeilen(seiten, finde_wiederholte_zeilen(seiten))
 
-    text = "\n".join(seiten)
-    print("Kündigungsfrist" in text)
-    print(text[:1500])
+    for a in setze_pfade(schneide_in_abschnitte(seiten))[:10]:
+        print(f"S.{a.seite:3}  Ziff. {a.nummer:9} {a.titel[:50]}")
 

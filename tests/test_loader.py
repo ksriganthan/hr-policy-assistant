@@ -11,6 +11,7 @@ from hr_policy_assistant.ingestion.loader import (
     lade_pdf,
     schneide_in_abschnitte,
     signatur,
+    ist_ueberschrift
 )
 
 # Zwei Miniseiten mit Kopfzeile, Fusszeile und echtem Inhalt.
@@ -106,3 +107,27 @@ def test_lade_pdf_fuehrt_die_echte_seitenzahl_mit():
     """Regression: der Listenindex ist nicht die Seitenzahl."""
     seiten = lade_pdf(PDF, ueberspringen={1, 2, 3})
     assert seiten[0].nummer == 4
+
+def test_ist_ueberschrift_erkennt_beide_schreibweisen():
+    assert ist_ueberschrift("2.5.9 Dienstjubiläen")
+    assert ist_ueberschrift("9.1. Schutz der Persönlichkeit")
+    assert ist_ueberschrift("1. Einleitung")
+
+
+def test_ist_ueberschrift_verwirft_tabellenzeilen():
+    assert not ist_ueberschrift("20 ½ 10")
+    assert not ist_ueberschrift("5 1/8 2.5")
+
+
+def test_ist_ueberschrift_verwirft_absatznummern():
+    assert not ist_ueberschrift("1 Der GAV ist öffentlich-rechtlicher Natur")
+
+
+def test_ist_ueberschrift_verwirft_saetze():
+    """Ein Satz enthaelt einen Punkt mit Leerzeichen dahinter."""
+    assert not ist_ueberschrift("8.4 beziehungsweise 9.2 Stunden berechnet. Für Teilzeit")
+
+
+def test_ist_ueberschrift_verwirft_ordnungszahlen():
+    """13. Monatslohn ist ein Begriff, kein Abschnitt."""
+    assert not ist_ueberschrift("13. Monatslohn.")

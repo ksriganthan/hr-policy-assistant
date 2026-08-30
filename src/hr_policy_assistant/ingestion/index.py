@@ -12,6 +12,7 @@ import ollama
 
 from hr_policy_assistant.ingestion.loader import (
     PROJEKT_WURZEL,
+    Abschnitt,
     bereinige_seiten,
     entferne_wiederholte_zeilen,
     finde_wiederholte_zeilen,
@@ -86,7 +87,7 @@ KORPUS = [
 # Ingestion
 # --------------------------------------------------------------------------
 
-def lese_abschnitte(dok: Dokument):
+def lese_abschnitte(dok: Dokument) -> list[Abschnitt]:
     """Volle Ingestion fuer ein Dokument, ohne die leeren Elternabschnitte."""
     pfad = PROJEKT_WURZEL / "data" / "raw" / dok.datei
 
