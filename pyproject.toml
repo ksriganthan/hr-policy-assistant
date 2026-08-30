@@ -5,6 +5,8 @@ description = "RAG-System über öffentliche Schweizer HR-Dokumente (GAV, Person
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "chromadb>=1.5.9",
+    "ollama>=0.6.2",
     "pdfplumber>=0.11.10",
 ]
 

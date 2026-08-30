@@ -7,6 +7,8 @@ venv/
 .pytest_cache/
 .ruff_cache/
 /messung.py
+/test_embed.py
+/frage.py
 
 # Secrets
 .env

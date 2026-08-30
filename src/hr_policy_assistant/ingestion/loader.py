@@ -2,6 +2,7 @@ import re
 import unicodedata
 from pathlib import Path
 from collections import Counter
+from dataclasses import dataclass
 
 import pdfplumber
 
@@ -74,6 +75,87 @@ def entferne_wiederholte_zeilen(seiten: list[str], signaturen: set[str]) -> list
         bereinigt.append("\n".join(behalten))
     return bereinigt
 
+# Ueberschrift: mehrstufige Nummer mit optionalem Schlusspunkt (2.5.9 / 9.1.)
+# ODER einstufige mit Punkt (1.), danach Leerzeichen und ein Nicht-Ziffer-Zeichen.
+UEBERSCHRIFT = re.compile(r"^(\d+(\.\d+)+\.?|\d+\.)\s+\D")
+
+# Notbremse gegen Satzzeilen. Die laengste echte Ueberschrift hat 81 Zeichen.
+MAX_UEBERSCHRIFT = 100
+
+
+@dataclass
+class Abschnitt:
+    """Ein Abschnitt des Dokuments, erkannt an seiner Gliederungsnummer."""
+    nummer: str
+    titel: str
+    text: str
+    pfad: str = ""
+
+
+def nummer_von(zeile: str) -> str:
+    """Die Gliederungsnummer am Zeilenanfang, ohne Schlusspunkt."""
+    return zeile.split()[0].rstrip(".")
+
+
+def titel_von(zeile: str) -> str:
+    """Die Zeile ohne die fuehrende Gliederungsnummer."""
+    teile = zeile.split(maxsplit=1)
+    return teile[1] if len(teile) > 1 else ""
+
+
+def ist_ueberschrift(zeile: str) -> bool:
+    """Nummerierte Ueberschrift, kein Satz und keine Ordnungszahl im Fliesstext.
+
+    Ein Satz enthaelt einen Punkt mit Leerzeichen dahinter ('berechnet. Fuer'),
+    eine Ordnungszahl endet mit einem Punkt ('13. Monatslohn.').
+    Beides geprueft am Titel, also ohne die eigene Nummer.
+
+    An zwei GAV gemessen: KSBL findet 123 von 123 Verzeichnisnummern,
+    USB alle 97 plus die tieferen Ebenen, die das Verzeichnis nicht auflistet.
+    """
+    if not UEBERSCHRIFT.match(zeile) or len(zeile) > MAX_UEBERSCHRIFT:
+        return False
+    t = titel_von(zeile)
+    return ". " not in t and not t.endswith(".")
+
+
+def schneide_in_abschnitte(seiten: list[str]) -> list[Abschnitt]:
+    """Schneidet den Text an jeder nummerierten Ueberschrift.
+
+    Zeilen vor der ersten Ueberschrift entfallen.
+    """
+    abschnitte: list[Abschnitt] = []
+    nummer, titel, zeilen = None, None, []
+
+    for zeile in "\n".join(seiten).split("\n"):
+        if ist_ueberschrift(zeile):
+            if nummer is not None:
+                abschnitte.append(Abschnitt(nummer, titel, "\n".join(zeilen).strip()))
+            nummer, titel, zeilen = nummer_von(zeile), titel_von(zeile), []
+        elif nummer is not None:
+            zeilen.append(zeile)
+
+    if nummer is not None:
+        abschnitte.append(Abschnitt(nummer, titel, "\n".join(zeilen).strip()))
+
+    return abschnitte
+
+def setze_pfade(abschnitte: list[Abschnitt]) -> list[Abschnitt]:
+    """Traegt in jeden Abschnitt den Pfad seiner uebergeordneten Titel ein.
+
+    Die Tiefe kommt aus der Anzahl Punkte in der Nummer. '2.3.3' ist Tiefe 3,
+    also haengt der Abschnitt unter '2.3' und '2'. Gearbeitet wird in Lesereihenfolge
+    mit einem Stapel, damit doppelt vergebene Nummern nicht durcheinanderbringen.
+    """
+    stapel: list[str] = []
+
+    for a in abschnitte:
+        tiefe = a.nummer.count(".") + 1
+        stapel = stapel[: tiefe - 1]
+        stapel.append(f"{a.nummer} {a.titel}")
+        a.pfad = " > ".join(stapel)
+
+    return abschnitte
 
 if __name__ == "__main__":
     pfad = PROJEKT_WURZEL / "data" / "raw" / "gav_universitaetsspital_basel.pdf"
