@@ -14,7 +14,7 @@ PROJEKT_WURZEL = Path(__file__).resolve().parents[3]
 # parents[3]  D:\hr-policy-assistant     ← die Wurzel
 
 
-def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> list[str]:
+def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> list[Seite]:
     """Extrahiert den Text jeder Seite einer PDF, eine Seite pro Listeneintrag.
        ueberspringen: Seitenzahlen (1-basiert), die nicht gelesen werden.
     """
@@ -27,7 +27,7 @@ def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> list[str]:
                 continue
             text = page.extract_text()
             if text:
-                seiten.append(text)
+                seiten.append(Seite(nummer,text))
     return seiten
 
 def bereinige_text(text: str) -> str:
@@ -37,6 +37,10 @@ def bereinige_text(text: str) -> str:
     # Wingdings-Aufzählungspunkte, Unicode-Kategorie Co, tragen keine Information
     text = "".join(z for z in text if unicodedata.category(z) != "Co")
     return text
+
+def bereinige_seiten(seiten: list[Seite]) -> list[Seite]:
+    """Wendet bereinige_text auf jede Seite an und behaelt die Seitenzahl."""
+    return [Seite(s.nummer, bereinige_text(s.text)) for s in seiten]
 
 
 def signatur(zeile: str) -> str:
@@ -58,8 +62,8 @@ def finde_wiederholte_zeilen(seiten: list[str], schwelle: float = 0.8) -> set[st
     normaler Satz, der auf zweien steht, die Schwelle reissen.
     """
     zaehler = Counter()
-    for text in seiten:
-        for sig in {signatur(z) for z in text.split("\n") if z.strip()}:
+    for s in seiten:
+        for sig in {signatur(z) for z in s.text.split("\n") if z.strip()}:
             zaehler[sig] += 1
 
     # 21 Seiten mal 0.8 ergibt 16.8. Alles ab 17 Seiten gilt als Kopf- oder Fusszeile
@@ -70,9 +74,9 @@ def finde_wiederholte_zeilen(seiten: list[str], schwelle: float = 0.8) -> set[st
 def entferne_wiederholte_zeilen(seiten: list[str], signaturen: set[str]) -> list[str]:
     """Entfernt aus jeder Seite die Zeilen, deren Signatur in `signaturen` steht."""
     bereinigt = []
-    for text in seiten:
-        behalten = [z for z in text.split("\n") if signatur(z) not in signaturen]
-        bereinigt.append("\n".join(behalten))
+    for s in seiten:
+        behalten = [z for z in s.text.split("\n") if signatur(z) not in signaturen]
+        bereinigt.append(Seite(s.nummer, "\n".join(behalten)))
     return bereinigt
 
 # Ueberschrift: mehrstufige Nummer mit optionalem Schlusspunkt (2.5.9 / 9.1.)
@@ -82,6 +86,12 @@ UEBERSCHRIFT = re.compile(r"^(\d+(\.\d+)+\.?|\d+\.)\s+\D")
 # Notbremse gegen Satzzeilen. Die laengste echte Ueberschrift hat 81 Zeichen.
 MAX_UEBERSCHRIFT = 100
 
+@dataclass
+class Seite:
+    """Eine Seite mit ihrer echten Seitenzahl."""
+
+    nummer: int
+    text: str
 
 @dataclass
 class Abschnitt:
@@ -89,6 +99,7 @@ class Abschnitt:
     nummer: str
     titel: str
     text: str
+    seite: int = 0
     pfad: str = ""
 
 
@@ -127,16 +138,18 @@ def schneide_in_abschnitte(seiten: list[str]) -> list[Abschnitt]:
     abschnitte: list[Abschnitt] = []
     nummer, titel, zeilen = None, None, []
 
-    for zeile in "\n".join(seiten).split("\n"):
-        if ist_ueberschrift(zeile):
-            if nummer is not None:
-                abschnitte.append(Abschnitt(nummer, titel, "\n".join(zeilen).strip()))
-            nummer, titel, zeilen = nummer_von(zeile), titel_von(zeile), []
-        elif nummer is not None:
-            zeilen.append(zeile)
+    for s in seiten:
+        for zeile in s.text.split("\n"):
+            if ist_ueberschrift(zeile):
+                if nummer is not None:
+                    text = "\n".join(zeilen).strip()
+                    abschnitte.append(Abschnitt(nummer, titel, text, seite))
+                nummer, titel, seite, zeilen = nummer_von(zeile), titel_von(zeile), s.nummer, []
+            elif nummer is not None:
+                zeilen.append(zeile)
 
     if nummer is not None:
-        abschnitte.append(Abschnitt(nummer, titel, "\n".join(zeilen).strip()))
+        abschnitte.append(Abschnitt(nummer, titel, "\n".join(zeilen).strip(), seite))
 
     return abschnitte
 

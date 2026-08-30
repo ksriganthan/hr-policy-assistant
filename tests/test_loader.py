@@ -4,10 +4,12 @@ import pytest
 
 from hr_policy_assistant.ingestion.loader import (
     PROJEKT_WURZEL,
+    Seite,
     bereinige_text,
     entferne_wiederholte_zeilen,
     finde_wiederholte_zeilen,
     lade_pdf,
+    schneide_in_abschnitte,
     signatur,
 )
 
@@ -15,15 +17,15 @@ from hr_policy_assistant.ingestion.loader import (
 # Die Inhaltszeilen sind genau die, die der geloeschte TOC-Filter
 # frueher faelschlich weggeworfen hat.
 SEITEN = [
-    "GAV Musterspital\nGAV 1 / 2\n1. Einleitung\n10 ¼ 5\n7 Stand 2016",
-    "GAV Musterspital\nGAV 2 / 2\n2. Ziel\n1 Der GAV stuetzt sich auf § 11 vom 2011",
+    Seite(1, "GAV Musterspital\nGAV 1 / 2\n1. Einleitung\n10 ¼ 5\n7 Stand 2016"),
+    Seite(2, "GAV Musterspital\nGAV 2 / 2\n2. Ziel\n1 Der GAV stuetzt sich auf § 11 vom 2011"),
 ]
 
 
 def _bereinigt() -> str:
     """Die Miniseiten durch die volle Kopfzeilen-Bereinigung."""
     marken = finde_wiederholte_zeilen(SEITEN)
-    return "\n".join(entferne_wiederholte_zeilen(SEITEN, marken))
+    return "\n".join(s.text for s in entferne_wiederholte_zeilen(SEITEN, marken))
 
 
 def test_bereinige_text_normalisiert_umlaute():
@@ -82,10 +84,25 @@ PDF = PROJEKT_WURZEL / "data" / "raw" / "gav_universitaetsspital_basel.pdf"
 def test_lade_pdf_gibt_liste_von_seiten_zurueck():
     seiten = lade_pdf(PDF)
     assert isinstance(seiten, list)
-    assert all(isinstance(s, str) for s in seiten)
+    assert all(isinstance(s, Seite) for s in seiten)
     assert len(seiten) > 20
 
 
 @pytest.mark.skipif(not PDF.exists(), reason="Korpus liegt nicht im Repo")
 def test_lade_pdf_ueberspringt_genau_die_angegebenen_seiten():
     assert len(lade_pdf(PDF, ueberspringen={2, 3})) == len(lade_pdf(PDF)) - 2
+
+
+def test_schneide_in_abschnitte_merkt_die_seite():
+    abschnitte = schneide_in_abschnitte(SEITEN)
+    assert abschnitte[0].nummer == "1"
+    assert abschnitte[0].seite == 1
+    assert abschnitte[1].nummer == "2"
+    assert abschnitte[1].seite == 2
+
+
+@pytest.mark.skipif(not PDF.exists(), reason="Korpus liegt nicht im Repo")
+def test_lade_pdf_fuehrt_die_echte_seitenzahl_mit():
+    """Regression: der Listenindex ist nicht die Seitenzahl."""
+    seiten = lade_pdf(PDF, ueberspringen={1, 2, 3})
+    assert seiten[0].nummer == 4

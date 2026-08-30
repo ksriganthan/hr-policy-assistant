@@ -12,7 +12,7 @@ import ollama
 
 from hr_policy_assistant.ingestion.loader import (
     PROJEKT_WURZEL,
-    bereinige_text,
+    bereinige_seiten,
     entferne_wiederholte_zeilen,
     finde_wiederholte_zeilen,
     lade_pdf,
@@ -91,7 +91,7 @@ def lese_abschnitte(dok: Dokument):
     pfad = PROJEKT_WURZEL / "data" / "raw" / dok.datei
 
     # Laden ohne Deckblatt und Verzeichnis, dann jede Seite einzeln normalisieren.
-    seiten = [bereinige_text(s) for s in lade_pdf(pfad, set(dok.ueberspringen))]
+    seiten = bereinige_seiten(lade_pdf(pfad, set(dok.ueberspringen)))
 
     # Kopf- und Fusszeilen ueber ihre Wiederholung finden und entfernen.
     seiten = entferne_wiederholte_zeilen(seiten, finde_wiederholte_zeilen(seiten))
@@ -167,6 +167,7 @@ def baue_index() -> None:
                 "dokument": dok.kuerzel,
                 "titel_dokument": dok.titel,
                 "nummer": a.nummer,
+                "seite": a.seite,
                 "titel": a.titel,
                 "pfad": a.pfad,
                 "stand": dok.stand,
