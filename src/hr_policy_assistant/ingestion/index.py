@@ -46,9 +46,9 @@ STAPEL = 32
 class Dokument:
     """Ein Korpusdokument mit allem, was an jedem seiner Chunks haengen soll.
 
-     frozen, weil ein Korpuseintrag eine Feststellung ueber das Dokument ist
-     und sich zur Laufzeit nicht aendern darf.
-     """
+    frozen, weil ein Korpuseintrag eine Feststellung ueber das Dokument ist
+    und sich zur Laufzeit nicht aendern darf.
+    """
 
     kuerzel: str
     datei: str
@@ -87,6 +87,7 @@ KORPUS = [
 # Ingestion
 # --------------------------------------------------------------------------
 
+
 def lese_abschnitte(dok: Dokument) -> list[Abschnitt]:
     """Volle Ingestion fuer ein Dokument, ohne die leeren Elternabschnitte."""
     pfad = PROJEKT_WURZEL / "data" / "raw" / dok.datei
@@ -111,15 +112,23 @@ def einbetten(texte: list[str]) -> list[list[float]]:
     for start in range(0, len(texte), STAPEL):
         teil = texte[start : start + STAPEL]
 
+        # Vor dem Aufruf ausgeben, nicht danach. Der erste Stapel laedt das
+        # Modell in den Speicher und braucht deshalb ein Vielfaches der Zeit
+        # der folgenden. Stand die Meldung dahinter, sah der Lauf genau
+        # waehrend dieser Wartezeit aus, als haenge er.
+        # flush, weil Python die Ausgabe sonst puffert und erst spaeter zeigt.
+        print(f"   Stapel {start + 1}-{start + len(teil)} von {len(texte)} ...", flush=True)
+
         # extend statt append, sonst entstuenden verschachtelte Stapel-Listen
         # statt einer flachen Liste mit einem Vektor pro Text.
         vektoren.extend(ollama.embed(model=EMBEDDING_MODELL, input=teil)["embeddings"])
-        print(f"   {start + len(teil)} von {len(texte)} eingebettet")
     return vektoren
+
 
 # --------------------------------------------------------------------------
 # Indexaufbau
 # --------------------------------------------------------------------------
+
 
 def baue_index() -> None:
     """Legt die Sammlung neu an und fuellt sie mit beiden Dokumenten."""
@@ -137,7 +146,6 @@ def baue_index() -> None:
     # Damit spielt es keine Rolle, ob ein Chunk 200 oder 2000 Zeichen hat.
     sammlung = klient.create_collection(name=SAMMLUNG, metadata={"hnsw:space": "cosine"})
 
-
     for dok in KORPUS:
         abschnitte = lese_abschnitte(dok)
         print(f"{dok.kuerzel}: {len(abschnitte)} Abschnitte")
@@ -154,7 +162,7 @@ def baue_index() -> None:
 
         # Was eingebettet wird. Der Pfad kommt dazu, weil das Thema oft nur in
         # der Ueberschrift steht. Ziff. 2.3.3 enthaelt das Wort
-        # «Kuendigungsfrist» im Absatztext nicht.
+        # «Beendigung» im Absatztext nicht.
         einbett_texte = [f"{a.pfad}\n{a.text}" for a in abschnitte]
 
         # Was gespeichert und spaeter zitiert wird. Ohne Pfad, damit ein Zitat
@@ -187,6 +195,7 @@ def baue_index() -> None:
 
     # Gegenprobe. Erwartet sind 211 bei den zwei aktuellen Dokumenten.
     print("Im Index", sammlung.count(), "Chunks")
+
 
 # Laeuft nur beim direkten Start, nicht beim Importieren durch ein anderes Modul.
 if __name__ == "__main__":
