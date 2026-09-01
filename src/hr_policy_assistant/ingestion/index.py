@@ -4,6 +4,7 @@ Ablauf: laden, bereinigen, an Gliederungsziffern chunken, mit Ollama einbetten,
 in Chroma ablegen. Wird direkt gestartet und einmal pro Korpusaenderung gebraucht.
 """
 
+import shutil
 from dataclasses import dataclass
 from typing import Literal
 
@@ -132,26 +133,69 @@ def einbetten(texte: list[str]) -> list[list[float]]:
 # --------------------------------------------------------------------------
 # Indexaufbau
 # --------------------------------------------------------------------------
+#
+# WIE EINE CHROMA-SAMMLUNG AUFGEBAUT IST
+#
+# Logisch ist eine Sammlung eine Tabelle mit vier Spalten. Nachgesehen am
+# 01.09. in der eigenen Datenbank, 211 Zeilen:
+#
+#   id             embedding      document                        metadata
+#   -------------  -------------  ------------------------------  --------------------------
+#   USB-000-1.1    [1024 Zahlen]  "Dieser Gesamtarbeitsvertrag…"  {dokument: USB, seite: 4, …}
+#   USB-001-1.2    [1024 Zahlen]  "Der vorliegende GAV bezweckt…" {dokument: USB, seite: 4, …}
+#   USB-009-2.3.3  [1024 Zahlen]  "Die Fristen fuer die Kuendi…"  {dokument: USB, seite: 6, …}
+#   …
+#
+# Diese vier Spalten sind genau die vier Listen, die unten an sammlung.add
+# gehen. Der jeweils erste Eintrag aller vier Listen bildet zusammen die erste
+# Zeile. Deshalb der Zwischenschritt ueber `eintraege`: so koennen sie nicht
+# gegeneinander verrutschen.
+#
+# Beim Abfragen vergleicht Chroma den Fragevektor mit Spalte `embedding` und
+# gibt die aehnlichsten Zeilen mit `document` und `metadata` zurueck. Gesucht
+# wird also nur in Spalte 2, geantwortet mit Spalte 3 und 4.
+#
+# PHYSISCH liegt diese eine Tabelle in ZWEI getrennten Speichern:
+#
+#   id, document, metadata  ->  chroma/chroma.sqlite3
+#   embedding               ->  chroma/<segment-uuid>/data_level0.bin
+#
+# Chroma ist keine Alternative zu SQLite, sondern benutzt es. SQLite beantwortet
+# "gib mir alle Zeilen mit dokument = USB" und fuehrt nebenbei einen
+# FTS5-Volltextindex ueber `document`. Was SQLite nicht kann, ist "finde die
+# vier aehnlichsten unter 211 Vektoren mit je 1024 Zahlen". Dafuer legt Chroma
+# daneben einen HNSW-Index an, einen Graphen fuer naeherungsweise
+# Nachbarschaftssuche. In der Tabelle `segments` stehen beide Teile als zwei
+# Zeilen, eine mit scope VECTOR und eine mit scope METADATA.
+#
+# Nicht gespeichert wird der Einbett-Text mit dem Pfad davor. Der geht einmal
+# an Ollama und existiert danach nur noch als Vektor. Beim Zitieren kommt
+# immer der reine GAV-Text aus `document` zurueck, ohne Pfadzeile.
+#
+# Nachsehen laesst sich das ohne chromadb, die Datei ist eine gewoehnliche
+# SQLite-Datenbank:
+#   sqlite3 chroma/chroma.sqlite3 ".tables"
+# --------------------------------------------------------------------------
 
 
 def baue_index() -> None:
     """Legt die Sammlung neu an und fuellt sie mit beiden Dokumenten."""
-    # Persistent, sonst laege der Index nur im Arbeitsspeicher und waere nach
-    # Programmende weg.
-    klient = chromadb.PersistentClient(path=str(CHROMA_PFAD))
-
-    # Die Sammlung wird bei jedem Lauf neu angelegt statt ergaenzt. Der Grund
-    # ist nicht in erster Linie doppeltes Einfuegen, denn die IDs sind
-    # deterministisch und Chroma legt bei bekannter ID keine zweite Zeile an.
-    # Der Grund sind Leichen: aendert sich ein Dokument, verschieben sich die
-    # Laufnummern in den IDs, und weggefallene Abschnitte blieben mit altem
-    # Text im Index stehen und tauchten weiter in Suchergebnissen auf.
+    # Der ganze Ordner wird geloescht, nicht nur die Sammlung. Grund ist eine
+    # Eigenheit von Chroma: delete_collection entfernt den Eintrag aus der
+    # SQLite-Datei, laesst den zugehoerigen HNSW-Ordner mit den Vektoren aber
+    # liegen. Nach sechs Laeufen lagen sechs solche Ordner da, fuenf davon von
+    # niemandem mehr referenziert.
     #
-    # Gefragt wird, statt einen Fehler zu fangen. Ein try/except haette beim
-    # ersten Lauf dasselbe getan, aber auch echte Fehler verschluckt, etwa
-    # fehlende Schreibrechte oder eine beschaedigte Datenbank.
-    if SAMMLUNG in {c.name for c in klient.list_collections()}:
-        klient.delete_collection(SAMMLUNG)
+    # Vertretbar, weil dieses Skript den Index ohnehin vollstaendig neu baut und
+    # in dieser Datenbank nur eine einzige Sammlung liegt. Kaeme je eine zweite
+    # dazu, muesste das hier wieder auf delete_collection umgestellt werden.
+    if CHROMA_PFAD.exists():
+        shutil.rmtree(CHROMA_PFAD)
+        print(f"alter Index unter {CHROMA_PFAD.name}/ geloescht")
+
+    # Persistent, sonst laege der Index nur im Arbeitsspeicher und waere nach
+    # Programmende weg. Legt den Ordner neu an.
+    klient = chromadb.PersistentClient(path=str(CHROMA_PFAD))
 
     # cosine vergleicht die Richtung der Vektoren und ignoriert ihre Laenge.
     # Damit spielt es keine Rolle, ob ein Chunk 200 oder 2000 Zeichen hat.
@@ -225,6 +269,7 @@ def baue_index() -> None:
 
     # Gegenprobe. Erwartet sind 211 bei den zwei aktuellen Dokumenten.
     print("Im Index", sammlung.count(), "Chunks")
+    print(sammlung)
 
 
 # Laeuft nur beim direkten Start, nicht beim Importieren durch ein anderes Modul.
