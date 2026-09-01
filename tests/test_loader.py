@@ -2,16 +2,16 @@
 
 import pytest
 
+from hr_policy_assistant.config import PROJEKT_WURZEL
 from hr_policy_assistant.ingestion.loader import (
-    PROJEKT_WURZEL,
     Seite,
     bereinige_text,
     entferne_wiederholte_zeilen,
     finde_wiederholte_zeilen,
+    ist_ueberschrift,
     lade_pdf,
     schneide_in_abschnitte,
     signatur,
-    ist_ueberschrift
 )
 
 # Zwei Miniseiten mit Kopfzeile, Fusszeile und echtem Inhalt.
@@ -107,6 +107,7 @@ def test_lade_pdf_fuehrt_die_echte_seitenzahl_mit():
     """Regression: der Listenindex ist nicht die Seitenzahl."""
     seiten = lade_pdf(PDF, ueberspringen={1, 2, 3})
     assert seiten[0].nummer == 4
+
 
 def test_ist_ueberschrift_erkennt_beide_schreibweisen():
     assert ist_ueberschrift("2.5.9 Dienstjubiläen")

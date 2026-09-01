@@ -1,17 +1,20 @@
+"""Laedt die GAV-PDFs und bereitet ihren Text zu Abschnitten auf.
+
+Reihenfolge: laden, pro Seite normalisieren, Kopf- und Fusszeilen ueber ihre
+Wiederholung entfernen, an nummerierten Ueberschriften schneiden, Pfade setzen.
+Kennt weder Chroma noch Ollama und laesst sich deshalb ohne beide testen.
+"""
+
 import re
 import unicodedata
 from collections import Counter
+from collections.abc import Set
 from dataclasses import dataclass
 from pathlib import Path
 
 import pdfplumber
 
-PROJEKT_WURZEL = Path(__file__).resolve().parents[3]
-
-# parents[0]  ingestion
-# parents[1]  hr_policy_assistant
-# parents[2]  src
-# parents[3]  D:\hr-policy-assistant     ← die Wurzel
+from hr_policy_assistant.config import PROJEKT_WURZEL
 
 # Ueberschrift: mehrstufige Nummer mit optionalem Schlusspunkt (2.5.9 / 9.1.)
 # ODER einstufige mit Punkt (1.), danach Leerzeichen und ein Nicht-Ziffer-Zeichen.
@@ -43,9 +46,10 @@ class Abschnitt:
     pfad: str = ""
 
 
-def lade_pdf(pfad: Path, ueberspringen: set[int] | None = None) -> list[Seite]:
+def lade_pdf(pfad: Path, ueberspringen: Set[int] | None = None) -> list[Seite]:
     """Extrahiert den Text jeder Seite einer PDF, eine Seite pro Listeneintrag.
     ueberspringen: Seitenzahlen (1-basiert), die nicht gelesen werden.
+    Nimmt set und frozenset, deshalb collections.abc.Set statt set.
     """
     if ueberspringen is None:  # None oder eingegebener Wert
         ueberspringen = set()

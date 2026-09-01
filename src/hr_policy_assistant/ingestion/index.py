@@ -4,14 +4,14 @@ Ablauf: laden, bereinigen, an Gliederungsziffern chunken, mit Ollama einbetten,
 in Chroma ablegen. Wird direkt gestartet und einmal pro Korpusaenderung gebraucht.
 """
 
-from contextlib import suppress
 from dataclasses import dataclass
+from typing import Literal
 
 import chromadb
 import ollama
 
+from hr_policy_assistant.config import PROJEKT_WURZEL
 from hr_policy_assistant.ingestion.loader import (
-    PROJEKT_WURZEL,
     Abschnitt,
     bereinige_seiten,
     entferne_wiederholte_zeilen,
@@ -34,6 +34,10 @@ SAMMLUNG = "hr_policy"
 CHROMA_PFAD = PROJEKT_WURZEL / "chroma"
 
 # Ollama bekommt die Texte portionsweise statt alle 211 in einem Aufruf.
+# Drei Gruende: der Fortschritt wird sichtbar, ein Fehler ist auf einen Stapel
+# eingegrenzt, und Ollama haelt weniger gleichzeitig im Speicher.
+# Die 32 ist bewusst nicht optimiert. Der Lauf findet einmal pro Korpusaenderung
+# statt, da lohnt sich die Messung nicht. 211 Chunks ergeben damit 7 Aufrufe.
 STAPEL = 32
 
 
@@ -53,8 +57,8 @@ class Dokument:
     kuerzel: str
     datei: str
     titel: str
-    stand: str
-    status: str
+    stand: str  # ISO, damit sich Staende als Text vergleichen und sortieren lassen
+    status: Literal["aktuell", "veraltet", "unbekannt"]
     ueberspringen: frozenset[int]
 
 
@@ -93,7 +97,7 @@ def lese_abschnitte(dok: Dokument) -> list[Abschnitt]:
     pfad = PROJEKT_WURZEL / "data" / "raw" / dok.datei
 
     # Laden ohne Deckblatt und Verzeichnis, dann jede Seite einzeln normalisieren.
-    seiten = bereinige_seiten(lade_pdf(pfad, set(dok.ueberspringen)))
+    seiten = bereinige_seiten(lade_pdf(pfad, dok.ueberspringen))
 
     # Kopf- und Fusszeilen ueber ihre Wiederholung finden und entfernen.
     seiten = entferne_wiederholte_zeilen(seiten, finde_wiederholte_zeilen(seiten))
@@ -136,61 +140,87 @@ def baue_index() -> None:
     # Programmende weg.
     klient = chromadb.PersistentClient(path=str(CHROMA_PFAD))
 
-    # add fuegt immer hinzu. Ohne Loeschen staende nach dem zweiten Lauf jeder
-    # Chunk doppelt im Index. Beim allerersten Lauf gibt es nichts zu loeschen,
-    # deshalb suppress.
-    with suppress(Exception):
+    # Die Sammlung wird bei jedem Lauf neu angelegt statt ergaenzt. Der Grund
+    # ist nicht in erster Linie doppeltes Einfuegen, denn die IDs sind
+    # deterministisch und Chroma legt bei bekannter ID keine zweite Zeile an.
+    # Der Grund sind Leichen: aendert sich ein Dokument, verschieben sich die
+    # Laufnummern in den IDs, und weggefallene Abschnitte blieben mit altem
+    # Text im Index stehen und tauchten weiter in Suchergebnissen auf.
+    #
+    # Gefragt wird, statt einen Fehler zu fangen. Ein try/except haette beim
+    # ersten Lauf dasselbe getan, aber auch echte Fehler verschluckt, etwa
+    # fehlende Schreibrechte oder eine beschaedigte Datenbank.
+    if SAMMLUNG in {c.name for c in klient.list_collections()}:
         klient.delete_collection(SAMMLUNG)
 
     # cosine vergleicht die Richtung der Vektoren und ignoriert ihre Laenge.
     # Damit spielt es keine Rolle, ob ein Chunk 200 oder 2000 Zeichen hat.
-    sammlung = klient.create_collection(name=SAMMLUNG, metadata={"hnsw:space": "cosine"})
+    # Laesst sich nach dem Anlegen nicht mehr aendern, ein Wechsel bedeutet
+    # Neuaufbau des Index.
+    #
+    # Dasselbe gilt fuers Embedding-Modell, das deshalb hier mitgeschrieben
+    # wird. frage.py kann vergleichen, ob es mit demselben Modell fragt, mit
+    # dem indexiert wurde, und abbrechen statt still Unsinn zu liefern. Ohne
+    # diesen Eintrag waere die Regel im Kommentar bei EMBEDDING_MODELL nur eine
+    # Notiz und im Code nirgends durchgesetzt.
+    sammlung = klient.create_collection(
+        name=SAMMLUNG,
+        metadata={"hnsw:space": "cosine", "embedding_modell": EMBEDDING_MODELL},
+    )
 
     for dok in KORPUS:
         abschnitte = lese_abschnitte(dok)
         print(f"{dok.kuerzel}: {len(abschnitte)} Abschnitte")
 
-        # Die folgenden vier Listen muessen gleich lang sein und dieselbe
-        # Reihenfolge haben. Chroma ordnet allein ueber die Position zu.
-        # Verschiebt sich eine, haengen die Metadaten am falschen Chunk, ohne
-        # dass irgendetwas abstuerzt.
-
-        # Laufnummer muss rein, weil Gliederungsnummern im Dokument nicht
-        # eindeutig sind. Das USB hat zweimal die Nummer 2.
-
-        ids = [f"{dok.kuerzel}-{i:03d}-{a.nummer}" for i, a in enumerate(abschnitte)]
-
-        # Was eingebettet wird. Der Pfad kommt dazu, weil das Thema oft nur in
-        # der Ueberschrift steht. Ziff. 2.3.3 enthaelt das Wort
-        # «Beendigung» im Absatztext nicht.
-        einbett_texte = [f"{a.pfad}\n{a.text}" for a in abschnitte]
-
-        # Was gespeichert und spaeter zitiert wird. Ohne Pfad, damit ein Zitat
-        # nur enthaelt, was woertlich im GAV steht.
-        dokumente = [a.text for a in abschnitte]
-
-        # Wird nicht eingebettet und ist deshalb nicht semantisch durchsuchbar.
-        # Dient dem Zitat und dem exakten Filtern, etwa where={"dokument": "USB"}.
-        metadaten = [
+        # Ein Eintrag pro Abschnitt, in einer einzigen Schleife gebaut.
+        # Chroma will vier getrennte Listen und ordnet sie allein ueber die
+        # Position einander zu. Wuerden die vier hier einzeln erzeugt, koennte
+        # sich eine gegen die anderen verschieben, und die Metadaten haengen am
+        # falschen Chunk, ohne dass irgendetwas abstuerzt. Ueber diesen
+        # Zwischenschritt kann das konstruktiv nicht mehr passieren.
+        eintraege = [
             {
-                "dokument": dok.kuerzel,
-                "titel_dokument": dok.titel,
-                "nummer": a.nummer,
-                "seite": a.seite,
-                "titel": a.titel,
-                "pfad": a.pfad,
-                "stand": dok.stand,
-                "status": dok.status,
+                # Die Laufnummer muss rein, weil Gliederungsnummern im Dokument
+                # nicht eindeutig sind. Gemessen 01.09.: im USB kommen alle
+                # sechs einstelligen Nummern doppelt vor, ohne Laufnummer gaebe
+                # es zwoelf ID-Kollisionen allein in diesem Dokument.
+                # :03d fuellt mit Nullen auf, damit IDs als Text richtig
+                # sortieren, USB-002 vor USB-010. Traegt bis 999 Chunks.
+                "id": f"{dok.kuerzel}-{i:03d}-{a.nummer}",
+                # Was eingebettet wird. Der Pfad kommt dazu, weil das Thema oft
+                # nur in einer uebergeordneten Ueberschrift steht. Beleg:
+                # Ziff. 2.3.3 haengt unter «2.3 Beendigung des
+                # Arbeitsverhaeltnisses», das Wort «Beendigung» kommt im
+                # Absatztext selbst nicht vor.
+                "einbett_text": f"{a.pfad}\n{a.text}",
+                # Was gespeichert und spaeter zitiert wird. Ohne Pfad, damit ein
+                # Zitat nur enthaelt, was woertlich im GAV steht.
+                "dokument": a.text,
+                # Wird nicht eingebettet und ist deshalb nicht semantisch
+                # durchsuchbar. Dient dem Zitat und dem exakten Filtern, etwa
+                # where={"dokument": "USB"}.
+                "metadaten": {
+                    "dokument": dok.kuerzel,
+                    "titel_dokument": dok.titel,
+                    "nummer": a.nummer,
+                    "seite": a.seite,
+                    "titel": a.titel,
+                    "pfad": a.pfad,
+                    "stand": dok.stand,
+                    "status": dok.status,
+                },
             }
-            for a in abschnitte
+            for i, a in enumerate(abschnitte)
         ]
 
-        vektoren = einbetten(einbett_texte)
+        vektoren = einbetten([e["einbett_text"] for e in eintraege])
+
+        # Erst hier wird in die vier Listen zerlegt, die Chroma erwartet.
         sammlung.add(
-            ids=ids,
+            ids=[e["id"] for e in eintraege],
             embeddings=vektoren,
-            documents=dokumente,
-            metadatas=metadaten,
+            documents=[e["dokument"] for e in eintraege],
+            metadatas=[e["metadaten"] for e in eintraege],
         )
 
     # Gegenprobe. Erwartet sind 211 bei den zwei aktuellen Dokumenten.
