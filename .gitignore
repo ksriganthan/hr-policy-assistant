@@ -9,6 +9,9 @@ venv/
 /messung.py
 /test_embed.py
 /frage.py
+/zeige_index.py
+/test_llm.py
+/antworte.py
 
 # Secrets
 .env
