@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import chromadb
-import ollama
+from hr_policy_assistant.gateway.llm import EMBEDDING_MODELL, embed
 
 from hr_policy_assistant.config import PROJEKT_WURZEL
 from hr_policy_assistant.ingestion.loader import (
@@ -126,7 +126,7 @@ def einbetten(texte: list[str]) -> list[list[float]]:
 
         # extend statt append, sonst entstuenden verschachtelte Stapel-Listen
         # statt einer flachen Liste mit einem Vektor pro Text.
-        vektoren.extend(ollama.embed(model=EMBEDDING_MODELL, input=teil)["embeddings"])
+        vektoren.extend(embed(teil))
     return vektoren
 
 

@@ -43,7 +43,6 @@ solche erkennbar ist.
 - API und Workflow. Die Pakete `api/`, `workflow/` und `evals/` enthalten nur ihren Docstring.
 - Eval-Set und Metriken. Fünf Testfragen von Hand geprüft, kein automatisches Eval.
 - Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`.
-- Der Indexbau in `index.py` ruft Ollama noch direkt, nicht über das Gateway.
 
 **Arbeitsskripte im Wurzelverzeichnis**
 
@@ -63,7 +62,7 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 3. `finde_wiederholte_zeilen` und `entferne_wiederholte_zeilen` werfen Kopf- und Fusszeilen weg
 4. `schneide_in_abschnitte` schneidet an nummerierten Überschriften und merkt sich die Startseite, `setze_pfade` trägt den Pfad der übergeordneten Titel ein
 5. `lese_abschnitte` in `ingestion/index.py` führt das pro Korpusdokument zusammen
-6. `einbetten` schickt die Texte in Stapeln von 32 an Ollama
+6. `einbetten` schickt die Texte in Stapeln von 32 an `embed` im Gateway
 7. `baue_index` legt die Chroma-Sammlung neu an und schreibt Vektoren, Zitattext und Metadaten
 8. `embed` in `gateway/llm.py` bettet die Frage ein, `frage_modell` ruft das Sprachmodell. Beide laufen durch
    `_mit_wiederholung`, das bei Verbindungsfehlern bis zu dreimal mit Pausen von 1, 2 und 4 Sekunden nachfasst
@@ -146,8 +145,10 @@ das Zitatformat über eine strukturierte Ausgabe erzwungen.
 
 ## Gateway
 
-Alle Aufrufe an Ollama gehen durch `gateway/llm.py`. Drei Dinge passieren dort für
-jeden Aufruf, ohne dass die aufrufenden Skripte davon wissen.
+Alle Aufrufe an Ollama gehen durch `gateway/llm.py`, beim Indexbau wie bei der
+Abfrage. Das Embedding-Modell ist dort als einzige Konstante definiert, `index.py`
+importiert sie. Drei Dinge passieren im Gateway für jeden Aufruf, ohne dass die
+aufrufenden Module davon wissen.
 
 **Protokoll.** Eine JSON-Zeile pro Modellaufruf in `logs/llm.jsonl`, angehängt, nie
 überschrieben. Zeit, Modell, Tokens ein und aus, Dauer, Versuchsnummer, Kosten und die
@@ -166,7 +167,7 @@ Cloud-Vergleich in Woche 5 wächst nur die Tabelle, der Code bleibt gleich.
 **Ein Befund aus dem Test.** Ollama beendet, Skript gestartet, Ollama neu gestartet. Der
 erste Lauf scheiterte, bevor die Wiederholung greifen konnte, weil das Embedding der
 Frage noch direkt an Ollama ging und nicht durch das Gateway. Ein Tor nützt nur, wenn
-niemand daran vorbeigeht. Seither läuft auch `embed` durch dieselbe Schleife. Ausserdem
+niemand daran vorbeigeht. Seither laufen Abfrage und Indexbau durch dieselbe Schleife. Ausserdem
 wirft die Ollama-Bibliothek bei fehlender Verbindung Pythons eingebauten
 `ConnectionError`, nicht den `httpx.ConnectError`, den sie intern fängt. Ohne den Test
 wäre beides erst im Betrieb aufgefallen.
