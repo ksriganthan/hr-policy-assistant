@@ -31,17 +31,19 @@ solche erkennbar ist.
 - Chroma-Sammlung `hr_policy` mit Kosinus-Abstand, 211 Chunks. Das Embedding-Modell steht in
   den Metadaten der Sammlung, die Abfrage prüft es beim Start
 - Metadaten an jedem Chunk, darunter Dokument, Ziffer, Seite, Titel, Pfad, Stand und Aktualitätsstatus
-- LLM-Gateway mit einer Funktion für alle Modellaufrufe, gibt Text, Tokenzahlen und Dauer zurück
+- LLM-Gateway für alle Ollama-Aufrufe, Chat und Embedding. Jeder Aufruf wird als JSON-Zeile
+  protokolliert, bei Verbindungsfehlern bis zu dreimal mit wachsender Pause wiederholt und mit
+  Tokenzahlen, Dauer und Kosten zurückgegeben
 - End-to-End-Antwort mit Belegnummern über ein lokales Sprachmodell (`gemma3:12b`), in erster Fassung
 - Tests für Loader und Textbereinigung, Linting mit ruff
 
 **Fehlt noch**
 
 - Strukturierte Ausgabe. Das Modell antwortet als Fliesstext, das Zitatformat wird erbeten statt erzwungen.
-- Protokoll, Wiederholungen und Kostenzählung im Gateway.
 - API und Workflow. Die Pakete `api/`, `workflow/` und `evals/` enthalten nur ihren Docstring.
 - Eval-Set und Metriken. Fünf Testfragen von Hand geprüft, kein automatisches Eval.
 - Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`.
+- Der Indexbau in `index.py` ruft Ollama noch direkt, nicht über das Gateway.
 
 **Arbeitsskripte im Wurzelverzeichnis**
 
@@ -52,6 +54,7 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 - `zeige_index.py` zeigt, was in der Chroma-Sammlung steht, inklusive Metadatenfilter
 - `messung.py` misst pro Dokument die Anzahl Abschnitte und die Längenverteilung
 - `test_embed.py` und `test_llm.py` prüfen die Ollama-Verbindung für Embedding und Sprachmodell
+- `kosten.py` liest das Protokoll und zeigt pro Aufruf Tokens, Dauer und Kosten sowie die Summen
 
 ## Architektur
 
@@ -62,8 +65,10 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 5. `lese_abschnitte` in `ingestion/index.py` führt das pro Korpusdokument zusammen
 6. `einbetten` schickt die Texte in Stapeln von 32 an Ollama
 7. `baue_index` legt die Chroma-Sammlung neu an und schreibt Vektoren, Zitattext und Metadaten
-8. `frage_modell` in `gateway/llm.py` ist die einzige Stelle, die ein Sprachmodell aufruft
+8. `embed` in `gateway/llm.py` bettet die Frage ein, `frage_modell` ruft das Sprachmodell. Beide laufen durch
+   `_mit_wiederholung`, das bei Verbindungsfehlern bis zu dreimal mit Pausen von 1, 2 und 4 Sekunden nachfasst
 9. Die Antwort entsteht aus Frage, den vier nächsten Chunks als nummerierte Belegstellen und einer Systemnachricht mit Regeln
+10. `protokolliere` schreibt Zeit, Modell, Tokens, Dauer, Versuchsnummer, Kosten und Frage als eine Zeile nach `logs/llm.jsonl`
 
 Ein Diagramm kommt später.
 
@@ -139,6 +144,33 @@ Tabellenfrage gerettet, das Zitatformat aber verschlechtert. Prompt-Regeln sind
 billig und unzuverlässig. Die Tabelle wird deshalb in der Ingestion repariert,
 das Zitatformat über eine strukturierte Ausgabe erzwungen.
 
+## Gateway
+
+Alle Aufrufe an Ollama gehen durch `gateway/llm.py`. Drei Dinge passieren dort für
+jeden Aufruf, ohne dass die aufrufenden Skripte davon wissen.
+
+**Protokoll.** Eine JSON-Zeile pro Modellaufruf in `logs/llm.jsonl`, angehängt, nie
+überschrieben. Zeit, Modell, Tokens ein und aus, Dauer, Versuchsnummer, Kosten und die
+Frage. Der Antworttext bleibt draussen, das Protokoll soll messen, nicht speichern.
+`kosten.py` wertet es aus. Das ist die Datenbasis für die Eval-Tabelle.
+
+**Wiederholung.** Bei Verbindungsfehlern bis zu drei Versuche mit Pausen von 1, 2 und
+4 Sekunden. Gefangen werden nur Fehler, die von selbst wieder verschwinden können,
+Ollama nicht erreichbar, Zeitüberschreitung, abgebrochene Verbindung. Ein falscher
+Modellname wird nicht wiederholt, der geht beim dritten Mal genauso schief.
+
+**Kosten.** Aus Tokenzahlen und einer Preistabelle je Modell, Eingabe und Ausgabe
+getrennt, in CHF pro Million Tokens. Lokale Modelle stehen mit null drin. Beim
+Cloud-Vergleich in Woche 5 wächst nur die Tabelle, der Code bleibt gleich.
+
+**Ein Befund aus dem Test.** Ollama beendet, Skript gestartet, Ollama neu gestartet. Der
+erste Lauf scheiterte, bevor die Wiederholung greifen konnte, weil das Embedding der
+Frage noch direkt an Ollama ging und nicht durch das Gateway. Ein Tor nützt nur, wenn
+niemand daran vorbeigeht. Seither läuft auch `embed` durch dieselbe Schleife. Ausserdem
+wirft die Ollama-Bibliothek bei fehlender Verbindung Pythons eingebauten
+`ConnectionError`, nicht den `httpx.ConnectError`, den sie intern fängt. Ohne den Test
+wäre beides erst im Betrieb aufgefallen.
+
 ## Technische Entscheide
 
 | Entscheid | Gewählt | Alternativen | Begründung |
@@ -150,7 +182,9 @@ das Zitatformat über eine strukturierte Ausgabe erzwungen.
 | Embedding-Modell | `bge-m3` über Ollama | multilingual-e5, jina-embeddings-v3 | läuft lokal, muss bei Indexbau und Abfrage identisch sein, ein Wechsel erzwingt den Neuaufbau |
 | Sprachmodell | `gemma3:12b` über Ollama | qwen3:14b, Cloud-API | passt in 12 GB Grafikspeicher, Deutsch, kein Denkmodus. Vergleich mit Cloud folgt |
 | Temperatur | 0 | Standard | reproduzierbare Antworten sind Voraussetzung für Evals |
-| Gateway | eine Funktion, ein Rückgabeobjekt | direkter Aufruf an jeder Stelle | Protokoll, Wiederholungen und Kosten kommen an einer Stelle dazu |
+| Gateway | eine Datei für Chat und Embedding, ein Rückgabeobjekt | direkter Aufruf an jeder Stelle | Protokoll, Wiederholungen und Kosten stehen an einer Stelle. Der Retry-Test hat gezeigt, dass ein Aufruf am Gateway vorbei alles davon verliert |
+| Protokollformat | JSON Lines, eine Zeile pro Aufruf | eine JSON-Datei, SQLite | anhängen ohne Lesen, Zeile für Zeile auswertbar, im Editor lesbar |
+| Wiederholung | 3 Versuche, Pausen 1, 2, 4 s, nur Verbindungsfehler | alles wiederholen, nie wiederholen | vorübergehende Fehler überbrücken, dauerhafte sofort sichtbar machen |
 | Workflow vs. Agent |  |  |  |
 
 ## Resultate
