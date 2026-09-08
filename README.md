@@ -27,6 +27,7 @@ solche erkennbar ist.
 
 - ETL-Strecke beider GAV vom PDF bis in den Vektorstore
 - Textbereinigung, Schnitt an Gliederungsziffern, Hierarchiepfad und Seitenzahl pro Abschnitt
+- Tabellen werden zeilenweise in Satzform gelesen, jeder Wert trägt seine Spaltenbezeichnung
 - Einbettung lokal über Ollama mit `bge-m3`
 - Chroma-Sammlung `hr_policy` mit Kosinus-Abstand, 211 Chunks. Das Embedding-Modell steht in
   den Metadaten der Sammlung, die Abfrage prüft es beim Start
@@ -41,7 +42,10 @@ solche erkennbar ist.
 
 - Strukturierte Ausgabe. Das Modell antwortet als Fliesstext, das Zitatformat wird erbeten statt erzwungen.
 - API und Workflow. Die Pakete `api/`, `workflow/` und `evals/` enthalten nur ihren Docstring.
-- Eval-Set und Metriken. Fünf Testfragen von Hand geprüft, kein automatisches Eval.
+- Eval-Set und Metriken. Fünf Testfragen von Hand geprüft, kein automatisches Eval. Zu keiner Frage
+  ist bisher festgehalten, was in der Antwort vorkommen muss und was nicht vorkommen darf.
+- Der Hinweis auf ein Dokument ohne passende Belegstelle. Er wird heute im Prompt erbeten und
+  nicht erzwungen, siehe «Antwortgenerierung».
 - Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`.
 
 **Arbeitsskripte im Wurzelverzeichnis**
@@ -57,7 +61,7 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 
 ## Architektur
 
-1. `lade_pdf` in `ingestion/loader.py` liest den Text je Seite mit Seitenzahl und überspringt die im Korpus vermerkten Verzeichnisseiten
+1. `lade_pdf` in `ingestion/loader.py` liest den Text je Seite mit Seitenzahl und überspringt die im Korpus vermerkten Verzeichnisseiten. `seite_als_text` liest eine Seite mit Tabellen in Bändern, also Text oberhalb, Tabelle in Satzform, Text unterhalb
 2. `bereinige_seiten` normalisiert die Zeichen und entfernt Symbolzeichen
 3. `finde_wiederholte_zeilen` und `entferne_wiederholte_zeilen` werfen Kopf- und Fusszeilen weg
 4. `schneide_in_abschnitte` schneidet an nummerierten Überschriften und merkt sich die Startseite, `setze_pfade` trägt den Pfad der übergeordneten Titel ein
@@ -116,6 +120,26 @@ zugleich, das Nummernmuster und die Abwesenheit von Satzmerkmalen im Titel. So
 findet der Loader beim KSBL 123 von 123 Verzeichnisnummern und beim USB alle 97
 plus die tieferen Ebenen, die das Verzeichnis nicht auflistet.
 
+**Tabellen.** `extract_text` gibt eine Tabelle als das aus, was optisch dasteht, also
+«Dienstjahre In Monatslohn Oder in Tagen» und darunter «20 ½ 10». Welche Zahl zu welcher
+Spalte gehört, ist danach nicht mehr entscheidbar, und beim Chunking kann die Kopfzeile
+ganz wegfallen. Bei der Lohntabelle ist das der teuerste Fehlertyp des Systems, weil
+Bandminimum und Bandmaximum ununterscheidbar werden. Tabellen laufen deshalb über
+`extract_tables` und werden zeilenweise in Sätze umgeschrieben, «Dienstjahre 20, In
+Monatslohn ½, Oder in Tagen 10». Ob die erste Zeile eine Kopfzeile ist, entscheidet die
+Zellenlänge, weil ein PDF diese Auszeichnung nicht speichert. Gemessen haben echte
+Kopfzeilen höchstens 13 Zeichen pro Zelle, die Urlaubstabelle auf Seite 10 hat 80, die
+Schwelle liegt bei 30. Passen Kopfzeile und Datenzeile nicht in der Länge zusammen, wird
+die reine Werteliste geschrieben, denn ein `zip` würde überzählige Werte still verwerfen.
+Nichts verlieren geht vor sauber benennen. Gelesen wird die Seite in Bändern statt die
+Tabellenzeilen anzuhängen, sonst stünde derselbe Inhalt zweimal im Text und beide Fassungen
+konkurrierten im Retrieval um dieselbe Frage. Betroffen sind die drei Tabellen des
+USB-GAV auf den Seiten 10, 11 und 24. Der KSBL-GAV hat keine.
+
+Nicht behandelt sind Tabellen über einen Seitenumbruch. `extract_tables` sieht auf der
+Folgeseite eine eigene Tabelle ohne Kopfzeile, dann greift der Rückfall auf die Werteliste.
+Der Fall kommt im Korpus nicht vor und wäre ohne Testfall nicht prüfbar.
+
 Eingebettet wird Pfad plus Abschnittstext, zitiert wird nur der Abschnittstext.
 Der Pfad muss in die Einbettung, weil das Thema oft nur in der Überschrift
 steht. Ziffer 2.3.3 des USB enthält das Wort «Kündigungsfrist» im Absatztext
@@ -139,17 +163,31 @@ Antwort auf einer RTX 5070 Ti. Zwei Befunde daraus.
 
 Bei der Frage nach 20 Dienstjahren lag der richtige Chunk auf Platz 2, und die
 Antwort war trotzdem falsch. Aus «10 Tage» wurde «CHF 10», weil die Tabelle im
-Chunk als `20 ½ 10` ohne Spaltenzuordnung steht. Das Retrieval hat funktioniert,
-die Generierung nicht. Belegt ist nicht richtig.
+Chunk als `20 ½ 10` ohne Spaltenzuordnung stand. Das Retrieval hat funktioniert,
+die Generierung nicht. Belegt ist nicht richtig. **Behoben in der Ingestion**, siehe
+«Tabellen». Seither lautet die Antwort «halber Monatslohn oder 10 Tage» mit Beleg auf
+USB Ziff. 2.5.9.
 
 Bei der Frage nach dem Vaterschaftsurlaub hat das Modell den Elternurlaub des
-anderen Dokuments so dargestellt, als beantworte er die Frage. Die Regel im
-Prompt hat das nicht verhindert.
+anderen Dokuments so dargestellt, als beantworte er die Frage. **Offen.**
 
-Ein Versuch mit drei zusätzlichen Prompt-Regeln hat die Einheit bei der
-Tabellenfrage gerettet, das Zitatformat aber verschlechtert. Prompt-Regeln sind
-billig und unzuverlässig. Die Tabelle wird deshalb in der Ingestion repariert,
-das Zitatformat über eine strukturierte Ausgabe erzwungen.
+**Fünf Prompt-Fassungen gegen diesen einen Fehler.** Ohne Regel gab das Modell den
+Elternurlaub als Antwort aus. Mit der Regel «ein benachbartes Thema ist keine Antwort»
+nannte es ihn korrekt als Elternurlaub, ohne das Fehlen zu melden. Mit der Anweisung,
+das Fehlen zuerst zu melden, liess es beides weg. Mit einem Rollen- und Aufbaublock
+(«nenne immer beide Spitäler») wurden vier von fünf Fragen deutlich besser und die
+Antwortzeit sank von 35 auf 20 Sekunden, aber der Elternurlaub füllte den KSBL-Platz
+wieder ohne Vermerk. Ein längerer Aufbaublock mit nummerierten Entscheidungsschritten
+machte es schlimmer und lieferte bei der Tabellenfrage «ein Monatslohn» statt «ein
+halber». Behalten wurde die vierte Fassung.
+
+Der Befund daraus. Eine Anweisung, die verlangt, eine Abwesenheit zu bemerken, ist die
+schwerste Aufgabe für ein Sprachmodell, weil im Prompt nichts steht, was sie auslöst.
+Und «nenne immer beide Häuser» steht im Widerspruch zu «nenne nur Passendes»; das Modell
+bricht dann die weichere Regel. Die Information ist aber ausrechenbar. Nach der Suche ist
+bekannt, aus welchen Dokumenten Treffer kamen, nach der Antwort, welche Belegstellen
+verwendet wurden. Der Abgleich gehört deshalb in den Code und braucht die strukturierte
+Ausgabe als Voraussetzung. Prompt-Regeln sind Bitten, Code ist eine Garantie.
 
 ## Gateway
 
@@ -188,6 +226,8 @@ wäre beides erst im Betrieb aufgefallen.
 | Paketmanager | uv | poetry, pip-tools | schnelle Auflösung und ein Lockfile, das den Neuaufbau reproduzierbar macht |
 | Chunking | Schnitt an Gliederungsziffern | feste Fenster mit Überlappung | der Abschnitt ist die Einheit, die zitiert wird, und der Vertrag ist bereits so gegliedert |
 | Chunk-Splitter | keiner | Obergrenze mit Nachteilung | gemessen liegt je ein Abschnitt pro Dokument über 2000 Zeichen, der Median bei 388 und 434 |
+| Tabellen | über `extract_tables` in Satzform, Seite in Bändern gelesen | Kopfzeile jedem Chunk voranstellen, Tabellenzeilen anhängen | die Zuordnung steht dann im Text selbst und übersteht Chunking und Retrieval, und kein Inhalt steht doppelt |
+| Kopfzeile erkennen | Heuristik über die Zellenlänge, Schwelle 30 | Schriftauszeichnung über `page.chars`, Liste von Hand | ein PDF speichert die Auszeichnung nicht. Die Alternativen sind deutlich mehr Code für drei Tabellen oder beim nächsten Dokument kaputt. Ein Fehlgriff kostet Zuordnung, nicht Inhalt |
 | Embedding-Modell | `bge-m3` über Ollama | multilingual-e5, jina-embeddings-v3 | läuft lokal, muss bei Indexbau und Abfrage identisch sein, ein Wechsel erzwingt den Neuaufbau |
 | Sprachmodell | `gemma3:12b` über Ollama | qwen3:14b, Cloud-API | passt in 12 GB Grafikspeicher, Deutsch, kein Denkmodus. Vergleich mit Cloud folgt |
 | Temperatur | 0 | Standard | reproduzierbare Antworten sind Voraussetzung für Evals |
