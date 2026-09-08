@@ -59,7 +59,7 @@ def lade_pdf(pfad: Path, ueberspringen: Set[int] | None = None) -> list[Seite]:
         for nummer, page in enumerate(pdf.pages, start=1):
             if nummer in ueberspringen:
                 continue
-            text = page.extract_text()
+            text = seite_als_text(page)  # vorher: text = page.extract_text()
             if text:  # Wenn PDF ein Scann ist, würde das hier nie erfüllt werden
                 seiten.append(Seite(nummer, text))
     return seiten
@@ -221,6 +221,108 @@ def setze_pfade(abschnitte: list[Abschnitt]) -> list[Abschnitt]:
 
     return abschnitte
 
+def zeile_ohne_luecken(zeile: list[str | None]) -> list[str]:
+    """Entfernt leere Zellen aus einer Tabellenzeile.
+
+    pdfplumber gibt pro Trennlinie eine Spalte zurueck, auch wenn dazwischen
+    nichts steht. Am USB gemessen: die Lohnband-Tabelle kommt als neun Spalten
+    an, davon tragen drei einen Wert und sechs sind None. Ohne diesen Schritt
+    laufen Kopfzeile und Datenzeile auseinander, weil die Kopfzeile leere
+    Texte ('') liefert und die Datenzeilen None.
+    """
+    sauber = []
+    for zelle in zeile:
+        if zelle is None:  # aus None machen wir einen leeren Text
+            zelle = ""
+        zelle = zelle.strip()  # Leerzeichen am Rand weg
+        if zelle:  # nur behalten, wenn noch etwas drin steht
+            sauber.append(zelle)
+    return sauber
+
+def tabelle_als_zeilen(tabelle: list[list[str | None]]) -> list[str]:
+    """Schreibt eine Tabelle in eine Zeile Text pro Datenzeile um.
+
+    Hat die Tabelle eine Kopfzeile, traegt jeder Wert seine Spaltenbezeichnung
+    mit. Hat sie keine, wird jede Zeile als reine Werteliste geschrieben und
+    keine Zeile uebersprungen. Zeilenumbrueche innerhalb einer Zelle werden zu
+    Leerzeichen, sonst zerfaellt der Satz beim spaeteren Schneiden an '\\n'.
+    """
+    if not tabelle:
+        return []
+
+    erste = zeile_ohne_luecken(tabelle[0])   # aufraeumen, bevor entschieden wird
+
+    if hat_kopfzeile(erste):
+        kopf = erste                          # Zeile null ist Beschriftung
+        datenzeilen = tabelle[1:]             # und gehoert nicht in die Ausgabe
+    else:
+        kopf = []                             # keine Beschriftung vorhanden
+        datenzeilen = tabelle                 # Zeile null ist Inhalt und bleibt drin
+
+    zeilen = []
+
+    for roh in datenzeilen:
+        werte = zeile_ohne_luecken(roh)
+        if not werte:                         # ganz leere Zeile, nichts zu schreiben
+            continue
+        # zip endet beim kuerzeren der beiden. Passt die Zeile nicht zur
+        # Kopfzeile, gehen die ueberzaehligen Werte verloren, deshalb der
+        # Rueckfall unten auf die reine Werteliste.
+        if kopf and len(werte) == len(kopf):
+            paare = [f"{k} {w}" for k, w in zip(kopf, werte)]
+        else:
+            paare = werte
+        zeilen.append(", ".join(p.replace("\n", " ") for p in paare))
+
+    return zeilen
+
+def hat_kopfzeile(erste_zeile: list[str]) -> bool:
+    """Die erste Zeile gilt als Kopfzeile, wenn jede Zelle kurz ist.
+
+    Erwartet eine bereits mit zeile_ohne_luecken aufgeraeumte Zeile, sonst
+    entscheiden die leeren Felder mit.
+
+    An den zwei GAV gemessen: echte Kopfzeilen haben maximal 13 Zeichen pro
+    Zelle, die Urlaubstabelle auf Seite 10 hat 80. Die Schwelle 30 liegt
+    dazwischen und ist bewusst grob.
+
+    Grenze: Laeuft eine Tabelle ueber einen Seitenumbruch, sieht extract_tables
+    auf der Folgeseite eine eigene Tabelle ohne Kopfzeile. Dann greift der
+    Rueckfall und es entstehen Wertelisten ohne Zuordnung. In den zwei
+    vorliegenden GAV kommt das nicht vor, deshalb nicht behandelt.
+    """
+    return bool(erste_zeile) and all(len(z) <= 30 for z in erste_zeile)
+
+def seite_als_text(page) -> str:
+    """Text einer Seite, Tabellen als Zeilen mit Spaltenzuordnung.
+
+    Ohne diesen Schritt liefert extract_text die Tabelle als nackte
+    Zahlenreihe ('20 ½ 10'), ohne dass ein Wert seiner Spalte zuzuordnen
+    waere. Gelesen wird deshalb in Baendern. Text oberhalb der Tabelle,
+    dann die Tabelle in Satzform, dann der Text unterhalb. Damit bleibt die
+    Lesereihenfolge erhalten und kein Inhalt steht doppelt.
+    """
+    tabellen = sorted(page.find_tables(), key=lambda t: t.bbox[1])  # von oben nach unte #find_tables() liefert die Koordinaten einer Tabelle im PDF
+
+    if not tabellen:                                 # der Normalfall, KSBL hat null Tabellen
+        return page.extract_text() or ""
+
+    teile: list[str] = []
+    oben = 0.0                                       # Unterkante des zuletzt gelesenen Bandes
+
+    for t in tabellen:
+        _, tabellen_oben, _, tabellen_unten = t.bbox          # bbox ist (links, oben, rechts, unten)
+        vor = page.crop((0, oben, page.width, tabellen_oben)).extract_text() #Schneidet ein Rechteck aus dieser Fläche heraus
+        if vor:
+            teile.append(vor)                                 # alles ueber der Tabelle
+        teile.extend(tabelle_als_zeilen(t.extract()))         # die Tabelle als Saetze
+        oben = tabellen_unten                                 # weiter unterhalb der Tabelle
+
+    rest = page.crop((0, oben, page.width, page.height)).extract_text()
+    if rest:
+        teile.append(rest)                                    # alles unter der letzten Tabelle
+
+    return "\n".join(teile)
 
 if __name__ == "__main__":
     pfad = PROJEKT_WURZEL / "data" / "raw" / "gav_universitaetsspital_basel.pdf"

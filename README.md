@@ -25,7 +25,7 @@ solche erkennbar ist.
 
 **Läuft heute**
 
-- Ingestion beider GAV vom PDF bis in den Vektorstore
+- ETL-Strecke beider GAV vom PDF bis in den Vektorstore
 - Textbereinigung, Schnitt an Gliederungsziffern, Hierarchiepfad und Seitenzahl pro Abschnitt
 - Einbettung lokal über Ollama mit `bge-m3`
 - Chroma-Sammlung `hr_policy` mit Kosinus-Abstand, 211 Chunks. Das Embedding-Modell steht in
@@ -72,6 +72,14 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 Ein Diagramm kommt später.
 
 ## Ingestion
+
+Die Ingestion ist eine ETL-Strecke. **Extract** liest den Text je Seite aus dem PDF.
+**Transform** normalisiert die Zeichen, entfernt Symbolzeichen sowie Kopf- und Fusszeilen,
+schneidet an Gliederungsziffern und trägt Pfad und Seitenzahl ein. **Load** schreibt Vektoren,
+Zitattext und Metadaten in die Chroma-Sammlung. Transformiert wird vor dem Laden und nicht danach,
+weil der Vektorstore keine Transformationssprache hat und der Chunk beim Schreiben bereits die
+Einheit sein muss, die später zitiert wird. Der grösste Teil der Arbeit steckt im Transform-Schritt,
+und zwar nicht im Umformen, sondern im Finden der Fälle, die still danebengehen.
 
 Beide PDF sind für Menschen gesetzt und nicht für Maschinen, und jedes bricht
 auf eigene Art.
