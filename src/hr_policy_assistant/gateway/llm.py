@@ -88,8 +88,16 @@ def berechne_kosten(modell: str, tokens_prompt: int, tokens_antwort: int) -> flo
     ein, aus = PREISE_CHF_PRO_MIO.get(modell, (0.0, 0.0))   # .get mit Standardwert, kein KeyError
     return round((tokens_prompt * ein + tokens_antwort * aus) / 1_000_000, 6) # 6 Nachkommastellen
 
-def frage_modell(system: str, nutzer: str, modell: str = MODELL) -> Antwort:
-    """Schickt eine System- und eine Nutzernachricht ans Modell. temperature 0."""
+def frage_modell(
+    system: str,
+    nutzer: str,
+    modell: str = MODELL,
+    schema: dict | None = None,      # NEU: JSON-Schema aus einem Pydantic-Modell, oder None
+) -> Antwort:
+    """Schickt eine System- und eine Nutzernachricht ans Modell. temperature 0.
+
+    Ist schema gesetzt, darf das Modell nur noch JSON in dieser Form erzeugen.
+    """
     start = time.perf_counter()
     r, versuch = _mit_wiederholung(
         lambda: ollama.chat(
@@ -99,6 +107,7 @@ def frage_modell(system: str, nutzer: str, modell: str = MODELL) -> Antwort:
                 {"role": "user", "content": nutzer},
             ],
             options={"temperature": 0},
+            format=schema,           # NEU: None bedeutet freier Text, ein Schema erzwingt die Form
         )
     )
     a = Antwort(
@@ -108,7 +117,7 @@ def frage_modell(system: str, nutzer: str, modell: str = MODELL) -> Antwort:
         tokens_antwort=r.get("eval_count", 0),
         dauer_s=round(time.perf_counter() - start, 2),
         versuch=versuch,
-        kosten_chf=berechne_kosten(  # NEU
+        kosten_chf=berechne_kosten(
             modell, r.get("prompt_eval_count", 0), r.get("eval_count", 0)
         ),
     )
