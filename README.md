@@ -35,17 +35,25 @@ solche erkennbar ist.
 - LLM-Gateway für alle Ollama-Aufrufe, Chat und Embedding. Jeder Aufruf wird als JSON-Zeile
   protokolliert, bei Verbindungsfehlern bis zu dreimal mit wachsender Pause wiederholt und mit
   Tokenzahlen, Dauer und Kosten zurückgegeben
-- End-to-End-Antwort mit Belegnummern über ein lokales Sprachmodell (`gemma3:12b`), in erster Fassung
+- End-to-End-Antwort mit Belegnummern über ein lokales Sprachmodell (`gemma3:12b`)
+- Strukturierte Ausgabe. Das Schema aus den Pydantic-Klassen geht als `format` an Ollama, die
+  Rückgabe wird mit `model_validate_json` geprüft. Pro Spital ein Eintrag mit Aussage und
+  Belegstellennummern
+- Deterministische Prüfung jeder Antwort gegen die gelieferten Belegstellen, vier Regeln
+- HTTP-Schnittstelle mit FastAPI. `POST /frage` gibt Auskunft, Mängel und Messwerte zurück,
+  `GET /gesund` ist ein Lebenszeichen. Die Schnittstellenbeschreibung nach OpenAPI und die
+  Oberfläche unter `/docs` entstehen aus denselben Pydantic-Klassen
 - Tests für Loader und Textbereinigung, Linting mit ruff
 
 **Fehlt noch**
 
-- Strukturierte Ausgabe. Das Modell antwortet als Fliesstext, das Zitatformat wird erbeten statt erzwungen.
-- API und Workflow. Die Pakete `api/`, `workflow/` und `evals/` enthalten nur ihren Docstring.
+- Workflow. Die Pakete `workflow/` und `evals/` enthalten nur ihren Docstring.
 - Eval-Set und Metriken. Fünf Testfragen von Hand geprüft, kein automatisches Eval. Zu keiner Frage
   ist bisher festgehalten, was in der Antwort vorkommen muss und was nicht vorkommen darf.
-- Der Hinweis auf ein Dokument ohne passende Belegstelle. Er wird heute im Prompt erbeten und
-  nicht erzwungen, siehe «Antwortgenerierung».
+- Groundedness. Die vier Prüfregeln prüfen die Struktur einer Antwort, nicht ihre Deckung durch
+  den zitierten Text. Ein Lauf ohne Mangel enthielt eine Aussage, die in der genannten Belegstelle
+  nicht steht, siehe «Strukturierte Ausgabe und Prüfung».
+- Tests für die Prüfregeln und für die Schnittstelle.
 - Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`.
 
 **Arbeitsskripte im Wurzelverzeichnis**
@@ -53,7 +61,7 @@ solche erkennbar ist.
 Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Alle gitignored.
 
 - `frage.py` stellt fünf feste Testfragen an den Index und zeigt zu jedem Treffer Abstand, Dokument, Seite, Ziffer, Titel und Textanfang
-- `antworte.py` stellt dieselben fünf Fragen End-to-End, also mit Antwort des Sprachmodells und Belegliste
+- `antworte.py` stellt dieselben fünf Fragen End-to-End über `auskunft.antworte` und druckt Auskunft, Mängel und Messwerte
 - `zeige_index.py` zeigt, was in der Chroma-Sammlung steht, inklusive Metadatenfilter
 - `messung.py` misst pro Dokument die Anzahl Abschnitte und die Längenverteilung
 - `test_embed.py` und `test_llm.py` prüfen die Ollama-Verbindung für Embedding und Sprachmodell
@@ -72,6 +80,9 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
    `_mit_wiederholung`, das bei Verbindungsfehlern bis zu dreimal mit Pausen von 1, 2 und 4 Sekunden nachfasst
 9. Die Antwort entsteht aus Frage, den vier nächsten Chunks als nummerierte Belegstellen und einer Systemnachricht mit Regeln
 10. `protokolliere` schreibt Zeit, Modell, Tokens, Dauer, Versuchsnummer, Kosten und Frage als eine Zeile nach `logs/llm.jsonl`
+11. `antworte` in `auskunft.py` gibt das Schema aus `modelle.py` an das Gateway weiter und prüft die Rückgabe mit `model_validate_json`
+12. `pruefe` in `pruefung.py` vergleicht die Auskunft mit den Metadaten der Treffer und gibt eine Liste von Mängeln zurück
+13. `stelle_frage` in `api/main.py` setzt Auskunft, Mängel und Messwerte zu einem `Ergebnis` zusammen und gibt es als JSON zurück
 
 Ein Diagramm kommt später.
 
@@ -169,7 +180,10 @@ die Generierung nicht. Belegt ist nicht richtig. **Behoben in der Ingestion**, s
 USB Ziff. 2.5.9.
 
 Bei der Frage nach dem Vaterschaftsurlaub hat das Modell den Elternurlaub des
-anderen Dokuments so dargestellt, als beantworte er die Frage. **Offen.**
+anderen Dokuments so dargestellt, als beantworte er die Frage. **Teilweise behoben.** Die
+falsche Gleichsetzung ist weg, und die Dokumentzuordnung prüft seit der strukturierten
+Ausgabe der Code. Ob das KSBL die Frage überhaupt beantwortet, bleibt eine inhaltliche Frage
+und gehört ins Eval-Set.
 
 **Fünf Prompt-Fassungen gegen diesen einen Fehler.** Ohne Regel gab das Modell den
 Elternurlaub als Antwort aus. Mit der Regel «ein benachbartes Thema ist keine Antwort»
@@ -218,6 +232,73 @@ wirft die Ollama-Bibliothek bei fehlender Verbindung Pythons eingebauten
 `ConnectionError`, nicht den `httpx.ConnectError`, den sie intern fängt. Ohne den Test
 wäre beides erst im Betrieb aufgefallen.
 
+## Strukturierte Ausgabe und Prüfung
+
+Das Modell antwortet nicht mehr in Fliesstext, sondern in einer vorgegebenen Form.
+`Auskunft.model_json_schema()` erzeugt aus den Pydantic-Klassen ein JSON-Schema, das als
+`format` an `ollama.chat` geht. Ollama schränkt damit beim Erzeugen ein, welche Zeichen
+zulässig sind, statt das Format im Prompt zu erbitten. Die Rückgabe wird anschliessend mit
+`model_validate_json` ein zweites Mal geprüft, weil ein anderes Modell oder eine Cloud-API
+sich anders verhalten kann.
+
+Die Form hat zwei Ebenen. `SpitalAuskunft` hält Spital, ob die Belegstellen die Frage
+beantworten, die Aussage in ganzen Sätzen und die Nummern, auf denen sie beruht. `Auskunft`
+hält die Liste dieser Einträge und einen optionalen Hinweis. Die Belegstellen hängen
+bewusst am einzelnen Spital und nicht an der ganzen Antwort, sonst liesse sich nicht
+prüfen, ob eine Aussage über das eine Haus auf einer Belegstelle des anderen beruht.
+
+Mit den Formatregeln aus dem Systemprompt verschwanden auch die eckigen Klammern im
+Antworttext. Eine übersehene Zeile, die noch ein umbenanntes Feld nannte, hat gezeigt, wie
+teuer eine tote Referenz im Prompt ist. Sie war die Ursache von drei Fehlern in der Ausgabe
+und verschwand mit einer einzigen Korrektur.
+
+`pruefe` in `pruefung.py` vergleicht danach die Antwort mit dem, was geliefert wurde. Vier
+Regeln, alle deterministisch und ohne Modellaufruf.
+
+1. Genau ein Eintrag je Spital
+2. Jede genannte Belegstellennummer existiert und stammt aus dem Dokument dieses Spitals
+3. Wer die Frage beantwortet, nennt eine Belegstelle, wer sie nicht beantwortet, nennt keine
+4. Im Antworttext stehen keine Belegstellennummern in eckigen Klammern
+
+Die Zuordnung von Nummer zu Dokument kommt aus den Metadaten der Treffer, also aus derselben
+Nummerierung, die der Prompt vergibt.
+
+**Was die Prüfung nicht kann.** Sie prüft die Struktur einer Antwort, nicht ihre Wahrheit.
+Ein Lauf mit null Mängeln enthielt die Aussage, Chefärzte gehörten zu den Führungs- und
+Fachkadern und seien deshalb vom GAV ausgenommen. Die zitierte Ziffer nennt Chefärzte gar
+nicht, sie nennt drei ausgenommene Gruppen und hält fest, dass die betroffenen Funktionen
+anderswo benannt werden. Richtiges Dokument, richtige Nummer, alle vier Regeln grün, Aussage
+nicht gedeckt. Deckung zu messen braucht ein Eval-Set mit Sollantworten, und sie im Betrieb
+zu erkennen braucht eine zweite Instanz, die jede Aussage gegen ihre Belegstelle hält.
+
+## API
+
+`api/main.py` stellt zwei Endpunkte bereit.
+
+| Methode | Pfad | Zweck |
+|---|---|---|
+| `GET` | `/gesund` | Lebenszeichen ohne Modellaufruf |
+| `POST` | `/frage` | Frage beantworten, prüfen und mit Messwerten zurückgeben |
+
+Die Anfrage kommt als `FrageAnfrage` mit der Frage und optional einem Spital. Die Frage ist
+auf 5 bis 500 Zeichen begrenzt, und zwar auf der Serverseite. Eine Grenze, die nur ein
+Client kennt, ist keine Grenze.
+
+Zurück geht ein `Ergebnis` mit der Auskunft, der Mängelliste aus `pruefe`, dem verwendeten
+Modell, der Dauer und den Kosten. Mängel führen bewusst nicht zu einem Fehlercode. Die
+Antwort existiert, sie hat nur einen Makel, und der Aufrufer soll entscheiden, was er damit
+macht.
+
+Die Signatur `def stelle_frage(anfrage: FrageAnfrage) -> Ergebnis` ist zugleich die
+Spezifikation. Aus ihr entstehen die Prüfung der eingehenden Daten, die Form der Antwort und
+die Beschreibung nach OpenAPI unter `/openapi.json`. Die Oberfläche unter `/docs` zeigt
+diese Beschreibung als bedienbares Formular. Geschrieben ist davon keine Zeile, deshalb kann
+sie auch nicht veralten.
+
+```bash
+uv run uvicorn hr_policy_assistant.api.main:app --reload
+```
+
 ## Technische Entscheide
 
 | Entscheid | Gewählt | Alternativen | Begründung |
@@ -234,6 +315,11 @@ wäre beides erst im Betrieb aufgefallen.
 | Gateway | eine Datei für Chat und Embedding, ein Rückgabeobjekt | direkter Aufruf an jeder Stelle | Protokoll, Wiederholungen und Kosten stehen an einer Stelle. Der Retry-Test hat gezeigt, dass ein Aufruf am Gateway vorbei alles davon verliert |
 | Protokollformat | JSON Lines, eine Zeile pro Aufruf | eine JSON-Datei, SQLite | anhängen ohne Lesen, Zeile für Zeile auswertbar, im Editor lesbar |
 | Wiederholung | 3 Versuche, Pausen 1, 2, 4 s, nur Verbindungsfehler | alles wiederholen, nie wiederholen | vorübergehende Fehler überbrücken, dauerhafte sofort sichtbar machen |
+| Strukturierte Ausgabe | JSON-Schema als `format` an Ollama, danach Validierung | Zitatformat im Prompt erbitten, Antwort mit regulären Ausdrücken zerlegen | fünf Prompt-Fassungen haben das Format nicht erzwungen, ein Schema tut es. Die Validierung bleibt, weil ein anderes Modell sich anders verhalten kann |
+| Belegstellen | je Spital statt je Antwort | flaches Feld über die ganze Antwort | nur so ist prüfbar, ob eine Aussage über ein Haus auf einer Belegstelle des anderen beruht |
+| Prüfung | eigenes Modul, deterministisch, vier Regeln | Prüfung im Prompt, Prüfung durch ein zweites Modell | gleiche Eingabe, gleiches Ergebnis, begründbar und ohne Kosten. Ein Modell für diese Aufgabe wäre teurer und unzuverlässiger |
+| Mängel in der Antwort | mit Status 200 zurückgeben | Fehlercode werfen, Mängel verschweigen | ein Mangel ist keine gescheiterte Anfrage. Verschweigen wäre schlimmer als benennen |
+| Schema im Gateway | als `dict` übergeben | Gateway kennt Pydantic | das Gateway bleibt die eine Stelle zu Ollama und muss über den Rest des Programms nichts wissen |
 | Workflow vs. Agent |  |  |  |
 
 ## Resultate
