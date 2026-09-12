@@ -8,18 +8,20 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from pathlib import Path
 
 import httpx
 import ollama
+
+from hr_policy_assistant.config import (
+    PROJEKT_WURZEL,  # dieselbe Wurzel wie Ingestion und API, nur noch in config.py definiert
+)
 
 MODELL = "gemma3:12b"
 EMBEDDING_MODELL = "bge-m3"
 VERSUCHE = 3
 WARTEN_S = 1.0
 
-PROJEKT_WURZEL = Path(__file__).resolve().parents[3]
-PROTOKOLL = PROJEKT_WURZEL / "logs" / "llm.jsonl"
+PROTOKOLL = PROJEKT_WURZEL / "logs" / "llm.jsonl"     # unveraendert, nimmt jetzt die importierte Wurzel
 
 VORUEBERGEHEND = (
     ConnectionError,                                     # NEU: das wirft die ollama-Bibliothek selbst

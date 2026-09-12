@@ -7,7 +7,7 @@ so the rest of this README is German as well.
 RAG-System über öffentliche Schweizer HR-Dokumente wie GAV und
 Personalreglemente, das Fragen mit nachprüfbaren Quellenzitaten beantwortet.
 
-> **In Arbeit** – AI-Engineering-Sprint 24.08.–04.10.2026. Was heute läuft und
+> **In Arbeit** – AI-Engineering-Sprint 24.08.–18.10.2026. Was heute läuft und
 > was fehlt, steht unter «Stand».
 
 ## Warum dieses Projekt
@@ -77,7 +77,7 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 6. `einbetten` schickt die Texte in Stapeln von 32 an `embed` im Gateway
 7. `baue_index` legt die Chroma-Sammlung neu an und schreibt Vektoren, Zitattext und Metadaten
 8. `embed` in `gateway/llm.py` bettet die Frage ein, `frage_modell` ruft das Sprachmodell. Beide laufen durch
-   `_mit_wiederholung`, das bei Verbindungsfehlern bis zu dreimal mit Pausen von 1, 2 und 4 Sekunden nachfasst
+   `_mit_wiederholung`, das bei Verbindungsfehlern bis zu dreimal nachfasst, mit Pausen von 1 und 2 Sekunden zwischen den Versuchen
 9. Die Antwort entsteht aus Frage, den vier nächsten Chunks als nummerierte Belegstellen und einer Systemnachricht mit Regeln
 10. `protokolliere` schreibt Zeit, Modell, Tokens, Dauer, Versuchsnummer, Kosten und Frage als eine Zeile nach `logs/llm.jsonl`
 11. `antworte` in `auskunft.py` gibt das Schema aus `modelle.py` an das Gateway weiter und prüft die Rückgabe mit `model_validate_json`
@@ -153,8 +153,8 @@ Der Fall kommt im Korpus nicht vor und wäre ohne Testfall nicht prüfbar.
 
 Eingebettet wird Pfad plus Abschnittstext, zitiert wird nur der Abschnittstext.
 Der Pfad muss in die Einbettung, weil das Thema oft nur in der Überschrift
-steht. Ziffer 2.3.3 des USB enthält das Wort «Kündigungsfrist» im Absatztext
-nicht.
+steht. Ziffer 2.3.3 des USB hängt unter «2.3 Beendigung des Arbeitsverhältnisses»,
+und das Wort «Beendigung» kommt im Absatztext selbst nicht vor.
 
 ## Antwortgenerierung
 
@@ -215,8 +215,8 @@ aufrufenden Module davon wissen.
 Frage. Der Antworttext bleibt draussen, das Protokoll soll messen, nicht speichern.
 `kosten.py` wertet es aus. Das ist die Datenbasis für die Eval-Tabelle.
 
-**Wiederholung.** Bei Verbindungsfehlern bis zu drei Versuche mit Pausen von 1, 2 und
-4 Sekunden. Gefangen werden nur Fehler, die von selbst wieder verschwinden können,
+**Wiederholung.** Bei Verbindungsfehlern bis zu drei Versuche, mit Pausen von 1 und
+2 Sekunden zwischen den Versuchen. Gefangen werden nur Fehler, die von selbst wieder verschwinden können,
 Ollama nicht erreichbar, Zeitüberschreitung, abgebrochene Verbindung. Ein falscher
 Modellname wird nicht wiederholt, der geht beim dritten Mal genauso schief.
 
@@ -314,7 +314,7 @@ uv run uvicorn hr_policy_assistant.api.main:app --reload
 | Temperatur | 0 | Standard | reproduzierbare Antworten sind Voraussetzung für Evals |
 | Gateway | eine Datei für Chat und Embedding, ein Rückgabeobjekt | direkter Aufruf an jeder Stelle | Protokoll, Wiederholungen und Kosten stehen an einer Stelle. Der Retry-Test hat gezeigt, dass ein Aufruf am Gateway vorbei alles davon verliert |
 | Protokollformat | JSON Lines, eine Zeile pro Aufruf | eine JSON-Datei, SQLite | anhängen ohne Lesen, Zeile für Zeile auswertbar, im Editor lesbar |
-| Wiederholung | 3 Versuche, Pausen 1, 2, 4 s, nur Verbindungsfehler | alles wiederholen, nie wiederholen | vorübergehende Fehler überbrücken, dauerhafte sofort sichtbar machen |
+| Wiederholung | 3 Versuche, Pausen 1 und 2 s, nur Verbindungsfehler | alles wiederholen, nie wiederholen | vorübergehende Fehler überbrücken, dauerhafte sofort sichtbar machen |
 | Strukturierte Ausgabe | JSON-Schema als `format` an Ollama, danach Validierung | Zitatformat im Prompt erbitten, Antwort mit regulären Ausdrücken zerlegen | fünf Prompt-Fassungen haben das Format nicht erzwungen, ein Schema tut es. Die Validierung bleibt, weil ein anderes Modell sich anders verhalten kann |
 | Belegstellen | je Spital statt je Antwort | flaches Feld über die ganze Antwort | nur so ist prüfbar, ob eine Aussage über ein Haus auf einer Belegstelle des anderen beruht |
 | Prüfung | eigenes Modul, deterministisch, vier Regeln | Prüfung im Prompt, Prüfung durch ein zweites Modell | gleiche Eingabe, gleiches Ergebnis, begründbar und ohne Kosten. Ein Modell für diese Aufgabe wäre teurer und unzuverlässiger |

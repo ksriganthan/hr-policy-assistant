@@ -53,7 +53,9 @@ def suche(frage: str, spital: str | None = None):
     vektor = embed([frage])
     where = {"dokument": spital} if spital else None
     t = hole_sammlung().query(query_embeddings=vektor, n_results=TREFFER, where=where)
-    return list(zip(t["documents"][0], t["metadatas"][0], t["distances"][0]))
+    # strict=True, weil Chroma drei parallele Listen liefert. Waere eine kuerzer, stuende
+    # ohne strict ein Dokument neben den Metadaten eines anderen, und nichts wuerde abstuerzen.
+    return list(zip(t["documents"][0], t["metadatas"][0], t["distances"][0], strict=True))
 
 
 def baue_prompt(frage: str, treffer) -> str:

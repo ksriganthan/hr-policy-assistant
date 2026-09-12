@@ -34,7 +34,7 @@ def pruefe(auskunft: Auskunft, treffer) -> list[str]:
         if not s.frage_beantwortet and s.belegstellen:
             maengel.append(f"{s.spital} beantwortet die Frage nicht, nennt aber {s.belegstellen}")
 
-        klammern = KLAMMERNUMMER.findall(s.text)          # NEU: alle Fundstellen, nicht nur die erstel
+        klammern = KLAMMERNUMMER.findall(s.text)          # NEU: alle Fundstellen, nicht nur die erste
         if klammern:
             maengel.append(f"{s.spital} hat Klammernummern im Text: {', '.join(klammern)}")
 

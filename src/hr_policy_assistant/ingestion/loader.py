@@ -269,7 +269,7 @@ def tabelle_als_zeilen(tabelle: list[list[str | None]]) -> list[str]:
         # Kopfzeile, gehen die ueberzaehligen Werte verloren, deshalb der
         # Rueckfall unten auf die reine Werteliste.
         if kopf and len(werte) == len(kopf):
-            paare = [f"{k} {w}" for k, w in zip(kopf, werte)]
+            paare = [f"{k} {w}" for k, w in zip(kopf, werte, strict=True)] # das if davor garantiert gleiche Laenge, strict haelt das fest
         else:
             paare = werte
         zeilen.append(", ".join(p.replace("\n", " ") for p in paare))

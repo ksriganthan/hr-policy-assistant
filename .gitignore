@@ -12,6 +12,8 @@ venv/
 /zeige_index.py
 /test_llm.py
 /antworte.py
+/logs/
+/kosten.py
 
 # Secrets
 .env

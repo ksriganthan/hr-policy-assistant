@@ -9,9 +9,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 import chromadb
-from hr_policy_assistant.gateway.llm import EMBEDDING_MODELL, embed
 
 from hr_policy_assistant.config import PROJEKT_WURZEL
+
+# EMBEDDING_MODELL kommt aus dem Gateway, damit Indexbau und Abfrage zwingend dasselbe
+# Modell nehmen. Zwei Modelle zeichnen zwei verschiedene Bedeutungskarten, deren Punkte
+# nicht vergleichbar sind. Modellwechsel bedeutet Neuaufbau des gesamten Index.
+from hr_policy_assistant.gateway.llm import EMBEDDING_MODELL, embed
 from hr_policy_assistant.ingestion.loader import (
     Abschnitt,
     bereinige_seiten,
@@ -25,11 +29,6 @@ from hr_policy_assistant.ingestion.loader import (
 # --------------------------------------------------------------------------
 # Einstellungen
 # --------------------------------------------------------------------------
-
-# Muss beim Indexbau und beim Abfragen identisch sein. Zwei Modelle zeichnen zwei
-# verschiedene Bedeutungskarten, deren Punkte nicht vergleichbar sind.
-# Modellwechsel bedeutet Neuaufbau des gesamten Index.
-EMBEDDING_MODELL = "bge-m3"
 
 SAMMLUNG = "hr_policy"
 CHROMA_PFAD = PROJEKT_WURZEL / "chroma"
