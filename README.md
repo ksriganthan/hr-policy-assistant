@@ -88,7 +88,22 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 12. `pruefe` in `pruefung.py` vergleicht die Auskunft mit den Metadaten der Treffer und gibt eine Liste von Mängeln zurück
 13. `stelle_frage` in `api/main.py` setzt Auskunft, Mängel und Messwerte zu einem `Ergebnis` zusammen und gibt es als JSON zurück
 
-Ein Diagramm kommt später.
+### Ablauf einer Anfrage
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/bilder/ablauf-anfrage-dunkel.png">
+  <img alt="Ablauf einer Anfrage im hr-policy-assistant, vier Schichten von der Schnittstelle bis zur Pruefung" src="docs/bilder/ablauf-anfrage.png">
+</picture>
+
+Die vier Bahnen sind die vier Schichten aus dem Abschnitt oben. Die Richtung der Pfeile ist
+zugleich die Abhängigkeitsrichtung im Code. `pruefung.py` kennt weder die API noch das Gateway,
+es bekommt eine `Auskunft` und die Treffer und gibt eine Liste von Mängeln zurück.
+
+**[Interaktive Fassung öffnen](https://ksriganthan.github.io/hr-policy-assistant/ablauf-anfrage.html)**
+mit Zoom, Suche, Fokus auf einen Knoten und Verfolgung der Beziehungen. Sie liegt als
+[`docs/ablauf-anfrage.html`](docs/ablauf-anfrage.html) im Repo, die Quelle dazu als
+[`docs/diagramme/ablauf-anfrage.workflow.json`](docs/diagramme/ablauf-anfrage.workflow.json).
+Gerendert mit [archify](https://github.com/tt-a1i/archify).
 
 ## Ingestion
 

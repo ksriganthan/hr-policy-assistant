@@ -1,0 +1,258 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "hr-policy-assistant: Ablauf einer Anfrage",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "all",
+      "entries": {
+        "frontend": {
+          "label": "Eingang"
+        },
+        "backend": {
+          "label": "Fachlogik"
+        },
+        "database": {
+          "label": "Daten und Protokoll"
+        },
+        "security": {
+          "label": "Pruefung"
+        },
+        "messagebus": {
+          "label": "Gateway"
+        },
+        "external": {
+          "label": "Sprachmodell"
+        },
+        "cloud": {
+          "visible": false
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "schnittstelle",
+      "label": "Schnittstelle (api/)"
+    },
+    {
+      "id": "fachlogik",
+      "label": "Fachlogik (auskunft.py)"
+    },
+    {
+      "id": "modell",
+      "label": "Modellzugriff (gateway/llm.py)"
+    },
+    {
+      "id": "pruefung",
+      "label": "Pruefung (modelle.py, pruefung.py)"
+    }
+  ],
+  "phases": [
+    {
+      "id": "suchen",
+      "label": "Suchen",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "formulieren",
+      "label": "Formulieren",
+      "fromCol": 3,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "pruefen",
+      "label": "Pruefen und ausliefern",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "mainPath": [
+    "anfrage",
+    "suche",
+    "prompt",
+    "gateway",
+    "validate",
+    "pruefe",
+    "ergebnis"
+  ],
+  "nodes": [
+    {
+      "id": "anfrage",
+      "lane": "schnittstelle",
+      "col": 0,
+      "type": "frontend",
+      "label": "POST /frage",
+      "sublabel": "FrageAnfrage",
+      "width": 140
+    },
+    {
+      "id": "ergebnis",
+      "lane": "schnittstelle",
+      "col": 5,
+      "type": "backend",
+      "label": "Ergebnis",
+      "sublabel": "Auskunft, Maengel, Messwerte",
+      "width": 140
+    },
+    {
+      "id": "suche",
+      "lane": "fachlogik",
+      "col": 1,
+      "type": "backend",
+      "label": "suche()",
+      "sublabel": "Aehnlichkeitssuche",
+      "width": 140
+    },
+    {
+      "id": "prompt",
+      "lane": "fachlogik",
+      "col": 2,
+      "type": "backend",
+      "label": "baue_prompt()",
+      "sublabel": "Belegstellen nummeriert",
+      "tag": "Herkunft je Haus",
+      "width": 140
+    },
+    {
+      "id": "gateway",
+      "lane": "modell",
+      "col": 3,
+      "type": "messagebus",
+      "label": "frage_modell()",
+      "sublabel": "drei Versuche, Kosten",
+      "tag": "einzige Tuer zum Modell",
+      "width": 140
+    },
+    {
+      "id": "ollama",
+      "lane": "modell",
+      "col": 4,
+      "type": "external",
+      "label": "gemma3:12b",
+      "sublabel": "Ollama, temperature 0",
+      "width": 140
+    },
+    {
+      "id": "validate",
+      "lane": "pruefung",
+      "col": 4,
+      "type": "security",
+      "label": "model_validate_json()",
+      "sublabel": "Pydantic erzwingt die Form",
+      "width": 140
+    },
+    {
+      "id": "pruefe",
+      "lane": "pruefung",
+      "col": 5,
+      "type": "security",
+      "label": "pruefe()",
+      "sublabel": "vier Regeln, deterministisch",
+      "tag": "prueft Form, nicht Wahrheit",
+      "width": 140
+    },
+    {
+      "id": "chroma",
+      "lane": "fachlogik",
+      "col": 0,
+      "type": "database",
+      "label": "Chroma",
+      "sublabel": "211 Chunks, bge-m3",
+      "width": 140
+    },
+    {
+      "id": "log",
+      "lane": "modell",
+      "col": 5,
+      "type": "database",
+      "label": "logs/llm.jsonl",
+      "sublabel": "ein Eintrag je Aufruf",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "anfrage-suche",
+      "from": "anfrage",
+      "to": "suche",
+      "label": "Frage und Spital",
+      "variant": "default"
+    },
+    {
+      "id": "chroma-suche",
+      "from": "chroma",
+      "to": "suche",
+      "label": "k=4 Treffer",
+      "variant": "dashed"
+    },
+    {
+      "id": "suche-prompt",
+      "from": "suche",
+      "to": "prompt",
+      "variant": "default"
+    },
+    {
+      "id": "prompt-gateway",
+      "from": "prompt",
+      "to": "gateway",
+      "label": "Systemprompt und Belege",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-ollama",
+      "from": "gateway",
+      "to": "ollama",
+      "label": "schema=Auskunft",
+      "variant": "default",
+      "role": "branch"
+    },
+    {
+      "id": "gateway-validate",
+      "from": "gateway",
+      "to": "validate",
+      "label": "JSON-Text",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-log",
+      "from": "gateway",
+      "to": "log",
+      "label": "Dauer, Tokens, Kosten",
+      "variant": "dashed"
+    },
+    {
+      "id": "validate-pruefe",
+      "from": "validate",
+      "to": "pruefe",
+      "variant": "default"
+    },
+    {
+      "id": "pruefe-ergebnis",
+      "from": "pruefe",
+      "to": "ergebnis",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Was der Code garantiert",
+      "items": [
+        "Pydantic erzwingt die Antwortform ueber ein JSON-Schema",
+        "pruefe() haelt jede Belegstelle gegen die vier gefundenen Treffer"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Was er nicht garantiert",
+      "items": [
+        "Ob die Aussage durch den Inhalt der Belegstelle gedeckt ist",
+        "Null Strukturmaengel heisst null Formfehler, nicht null Falschaussagen"
+      ]
+    }
+  ]
+}
