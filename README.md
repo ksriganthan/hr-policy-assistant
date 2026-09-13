@@ -43,13 +43,17 @@ solche erkennbar ist.
 - HTTP-Schnittstelle mit FastAPI. `POST /frage` gibt Auskunft, Mängel und Messwerte zurück,
   `GET /gesund` ist ein Lebenszeichen. Die Schnittstellenbeschreibung nach OpenAPI und die
   Oberfläche unter `/docs` entstehen aus denselben Pydantic-Klassen
+- Eval-Set mit 20 Fällen, zu jedem eine vor dem Lauf festgelegte Sollantwort je Haus.
+  Runner misst Retrieval, `frage_beantwortet`, Pflicht- und Verbotsbegriffe, Strukturmängel,
+  p50 und p95, Tokens und Kosten und schreibt eine CSV je Lauf
 - Tests für Loader und Textbereinigung, Linting mit ruff
 
 **Fehlt noch**
 
-- Workflow. Die Pakete `workflow/` und `evals/` enthalten nur ihren Docstring.
-- Eval-Set und Metriken. Fünf Testfragen von Hand geprüft, kein automatisches Eval. Zu keiner Frage
-  ist bisher festgehalten, was in der Antwort vorkommen muss und was nicht vorkommen darf.
+- Workflow. Das Paket `workflow/` enthält nur seinen Docstring.
+- Anhänge ohne Gliederungsziffer. Die Lohntabelle auf Seite 24 des USB-GAV liegt im Index unter
+  einem Abschnitt über Verbandskosten, weil «Anhang 3: Lohntabelle» keine Ziffer trägt und deshalb
+  keinen neuen Abschnitt auslöst. Der Chunk ist über die Vektorsuche nicht auffindbar.
 - Groundedness. Die vier Prüfregeln prüfen die Struktur einer Antwort, nicht ihre Deckung durch
   den zitierten Text. Ein Lauf ohne Mangel enthielt eine Aussage, die in der genannten Belegstelle
   nicht steht, siehe «Strukturierte Ausgabe und Prüfung».
@@ -322,22 +326,85 @@ uv run uvicorn hr_policy_assistant.api.main:app --reload
 | Schema im Gateway | als `dict` übergeben | Gateway kennt Pydantic | das Gateway bleibt die eine Stelle zu Ollama und muss über den Rest des Programms nichts wissen |
 | Workflow vs. Agent |  |  |  |
 
+## Evals
+
+Zwanzig Fragen aus beiden GAV, zu jeder eine vor dem Lauf festgelegte Sollantwort **je Haus**.
+Pro Fall stehen dort die Ziffer, die unter den vier Treffern sein muss, der Sollwert für
+`frage_beantwortet`, Pflichtbegriffe und Verbotsbegriffe. Die Fälle liegen als `evals/faelle.yaml`
+und damit als Daten neben dem Code, der sie ausführt. Der Massstab ist eine fachliche Setzung,
+das Messgerät ist Code, und die Trennung hält nachvollziehbar, dass die Erwartung nicht
+nachträglich an das Ergebnis angepasst wurde.
+
+Die Mischung ist Absicht. Acht Fragen regeln beide Häuser, vier nur eines, zwei keines, drei
+prüfen Tabellen und drei ein Nachbarthema, das die Ähnlichkeitssuche zuverlässig mitbringt.
+Gemessen wird pro Haus, also 40 Antworten je Lauf, weil bei einer Frage die eine Seite stimmen
+und die andere falsch sein kann.
+
+```bash
+uv run python -m hr_policy_assistant.evals.lauf
+```
+
+### Baseline, 13.09.2026
+
+gemma3:12b, temperature 0, fünf Läufe. Massgeblich ist der fünfte.
+
+| Kennzahl | Wert | von |
+|---|---|---|
+| Erwartete Ziffer unter den Treffern | 28 | 31 Seiten mit erwarteter Ziffer |
+| `frage_beantwortet` stimmt | 38 | 40 |
+| Pflichtbegriffe vollständig | 35 | 40 |
+| Verbotsbegriffe, keiner gefunden | 38 | 40 |
+| Strukturmängel aus `pruefe()` | 12 | ganzer Lauf |
+| Dauer p50 / p95 | 32.2 s / 46.2 s | 20 Werte |
+| Tokens ein / aus | 30338 / 4226 | 20 Fragen |
+| Kosten | CHF 0.000000 | lokal |
+
+Neun der vierzig Seiten haben keine erwartete Ziffer, weil das jeweilige Haus das Thema nicht
+regelt. Sie zählen bei der Retrieval-Quote nicht mit, sonst würde gegen eine Grundgesamtheit
+gerechnet, in der es nichts zu treffen gibt. Verfehlt wurden drei Ziffern.
+
+### Was die Zahlen gezeigt haben
+
+**Reproduzierbarkeit.** Vier Läufe lieferten aufs Token identische Werte, 30338 hinein und
+4226 hinaus, und alle fünf dieselben zwölf Strukturmängel bei identischen Quoten. Temperature 0 arbeitet über den ganzen Katalog
+reproduzierbar, nicht nur über fünf Fragen.
+
+**Die Halluzination ist noch da.** Der Chefärzte-Fall antwortet, Chefärzte seien den Führungs-
+und Fachkadern zugeordnet. USB Ziff. 1.3 nennt sie nicht und hält fest, dass die Funktionen
+betrieblich benannt werden. Der Verbotsbegriff hat den Fall zuerst durchgelassen, weil er als
+ganzer Satz eingetragen war und das Modell anders formuliert. Gefunden wurde er über den
+fehlenden Pflichtbegriff, also über die ausgelassene Einschränkung. Ein Verbotsbegriff sucht
+eine bekannte Formulierung, ein Pflichtbegriff eine Einschränkung aus der Quelle.
+
+**p95 ist aus zwanzig Werten nicht belastbar.** Über fünf Läufe schwankt er zwischen 42.8 und
+48.5 Sekunden bei identischen Tokenzahlen, der Median dagegen nur zwischen 31.1 und 32.2. Bei
+zwanzig Werten ist p95 praktisch der zweitlangsamste, ein einzelner Ausreisser bestimmt ihn.
+Wer die Zahl nennt, nennt die Anzahl Messungen dazu.
+
+**Der Katalog war an drei Stellen falsch**, obwohl er von Hand aus dem Gesetzestext geschrieben
+wurde. Wer «gut genug» definiert, definiert es nicht einmal, sondern korrigiert den Massstab,
+sobald die erste Messung zeigt, wo er danebenlag.
+
+### Was das Set nicht misst
+
+Ob eine Aussage durch ihre Belegstelle gedeckt ist. Geprüft wird, ob die Belegstelle existiert,
+zum richtigen Haus gehört und ob bestimmte Wörter vorkommen. Verglichen wird die Antwort gegen
+eine Begriffsliste, nicht gegen den Text der Belegstelle selbst. Ein Verbotsbegriff fängt genau
+den einen bekannten Fehler und keinen unbekannten. Ein Eval-Set misst Regressionen, es entdeckt
+nichts Neues. Das ist die Aufgabe der Kritik-Rolle, und der Chefärzte-Fall ist ihr Abnahmetest.
+
 ## Resultate
 
-Belastbar ist bisher nur das Retrieval, die Generierung ist von Hand an fünf
-Fragen geprüft. Die vollständigen Zahlen kommen ab Woche 3 mit dem Eval-Set.
+| Setup | Ziffer getroffen | Pflichtbegriffe | Verbotsbegriffe | Strukturmängel | CHF/Anfrage | p95 |
+|---|---|---|---|---|---|---|
+| Baseline (naives RAG) | 28/31 | 35/40 | 38/40 | 12 | 0.000000 | 46.2 s |
+| LangGraph + Kritik-Rolle |  |  |  |  |  |  |
+| Agent-Loop |  |  |  |  |  |  |
+| On-Premise gegen Cloud |  |  |  |  |  |  |
 
-| Setup | Retrieval-Precision | Groundedness | Halluzinationsrate | CHF/Anfrage | p95-Latenz |
-|---|---|---|---|---|---|
-| Baseline (naives RAG) | k=2 → 1.0 · k=4 → 0.6–0.7 | offen | 1 von 5 von Hand | 0.00 (lokal) | ~16 s |
-| LangGraph + Kritik-Rolle |  |  |  |  |  |
-| Agent-Loop |  |  |  |  |  |
-| On-Premise (Ollama) |  |  |  |  |  |
-
-Die Retrieval-Precision wurde an fünf Testfragen von Hand beurteilt. Bei allen
-fünf sind die ersten zwei Treffer relevant, ab Platz drei steht Rauschen. Fünf
-Fragen sind eine kleine Stichprobe, die Zahl ist ein Ausgangspunkt und kein
-Beleg.
+Aus Woche 1 zusätzlich die Retrieval-Precision, an fünf Testfragen von Hand beurteilt, k=2
+gleich 1.0 und k=4 zwischen 0.6 und 0.7. Fünf Fragen sind eine kleine Stichprobe, die Zahl ist
+ein Ausgangspunkt und kein Beleg.
 
 ## Setup
 

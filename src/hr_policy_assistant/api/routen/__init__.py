@@ -1,0 +1,1 @@
+"""Endpunkte, nach Zweck getrennt. Eingehaengt werden sie in api/main.py."""

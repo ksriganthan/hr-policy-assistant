@@ -10,6 +10,7 @@ dependencies = [
     "ollama>=0.6.2",
     "pdfplumber>=0.11.10",
     "pydantic>=2.13.5",
+    "pyyaml>=6.0.3",
     "uvicorn>=0.52.4",
 ]
 

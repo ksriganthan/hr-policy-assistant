@@ -50,10 +50,21 @@ Woche 4 die Kritik-Rolle.
 
 ## Ablage
 
-- `faelle.yaml` – die Fälle
-- `lauf.py` – lädt die Fälle, ruft `auskunft.antworte()`, wendet `pruefung.pruefe()` an,
-  prüft die Sollkriterien, schreibt eine Zeile pro Frage
-- `ergebnisse/` – CSV pro Lauf, Zeitstempel und Modellname im Dateinamen
+Code und Daten liegen getrennt. Alles unter `src/` landet laut `pyproject.toml` im
+installierbaren Paket, Testfälle und Ergebnisse gehören dort nicht hinein. Gleiche Logik wie
+bei `data/raw/`, `logs/` und `tests/`.
+
+- `evals/faelle.yaml` – die Fälle, von Hand gepflegt
+- `evals/ergebnisse/` – CSV pro Lauf, Zeitstempel und Modellname im Dateinamen
+- `src/hr_policy_assistant/evals/lauf.py` – der Runner. Lädt die Fälle, ruft
+  `auskunft.antworte()`, wendet `pruefung.pruefe()` an, prüft die Sollkriterien und schreibt
+  eine Zeile pro Frage
+
+Aufruf aus dem Projektverzeichnis.
+
+```bash
+uv run python -m hr_policy_assistant.evals.lauf
+```
 
 Die Prüflogik pro Frage gehört hierher und nicht nach `pruefung.py`. Dort steht, was immer
 gilt, unabhängig von der Frage. Hier steht, was für diese eine Frage erwartet wird.

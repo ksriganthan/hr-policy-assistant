@@ -820,6 +820,7 @@ dependencies = [
     { name = "ollama" },
     { name = "pdfplumber" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "uvicorn" },
 ]
 
@@ -836,6 +837,7 @@ requires-dist = [
     { name = "ollama", specifier = ">=0.6.2" },
     { name = "pdfplumber", specifier = ">=0.11.10" },
     { name = "pydantic", specifier = ">=2.13.5" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "uvicorn", specifier = ">=0.52.4" },
 ]
 
