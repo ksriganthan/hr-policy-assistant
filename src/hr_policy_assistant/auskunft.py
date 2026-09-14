@@ -1,5 +1,7 @@
 """Frage rein, geprüfte Auskunft raus. Suche, Prompt, Modellaufruf, Validierung."""
 
+import os
+
 import chromadb
 
 from hr_policy_assistant.gateway.llm import embed, frage_modell
@@ -35,7 +37,9 @@ Regeln:
 - Erfinde nichts.
 - Schreibe auf Deutsch."""
 
-TREFFER = 4
+# k, also wie viele Chunks als Belegstellen mitgehen. Standard 4, fuer Messlaeufe ohne
+# Codeaenderung ueber die Umgebungsvariable HRPA_TREFFER ueberschreibbar.
+TREFFER = int(os.environ.get("HRPA_TREFFER", "4"))
 
 _sammlung = None                                 # Unterstrich heisst, das geht nur dieses Modul etwas an
 
@@ -79,4 +83,11 @@ def antworte(frage: str, spital: str | None = None):
         schema=Auskunft.model_json_schema(),
     )
     auskunft = Auskunft.model_validate_json(a.text)
+
+    # Das Modell haelt die Regel «bei frage_beantwortet false eine leere Liste» nicht
+    # zuverlaessig ein. Statt einer weiteren Prompt-Runde wird sie hier erzwungen.
+    for s in auskunft.spitaeler:  # ein Eintrag je Haus, USB und KSBL
+        if not s.frage_beantwortet:  # sagt das Haus «dazu steht nichts»
+            s.belegstellen = []  # dann gibt es auch nichts zu belegen
+
     return auskunft, a, treffer
