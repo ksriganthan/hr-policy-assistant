@@ -4,8 +4,9 @@ A retrieval system over public Swiss collective labour agreements that answers
 questions with citations down to section number and page. The corpus is German,
 so the rest of this README is German as well.
 
-RAG-System über öffentliche Schweizer HR-Dokumente wie GAV und
-Personalreglemente, das Fragen mit nachprüfbaren Quellenzitaten beantwortet.
+RAG-System über öffentliche Schweizer Gesamtarbeitsverträge, das Fragen mit
+nachprüfbaren Quellenzitaten beantwortet. Der Korpus umfasst heute zwei GAV,
+weitere HR-Dokumente wie Personalreglemente sind vorgesehen.
 
 > **In Arbeit** – AI-Engineering-Sprint 24.08.–18.10.2026. Was heute läuft und
 > was fehlt, steht unter «Stand».
@@ -23,7 +24,7 @@ solche erkennbar ist.
 
 ## Stand
 
-**Läuft heute**
+### Läuft heute
 
 - ETL-Strecke beider GAV vom PDF bis in den Vektorstore
 - Textbereinigung, Schnitt an Gliederungsziffern, Hierarchiepfad und Seitenzahl pro Abschnitt
@@ -33,36 +34,40 @@ solche erkennbar ist.
   den Metadaten der Sammlung, die Abfrage prüft es beim Start
 - Metadaten an jedem Chunk, darunter Dokument, Ziffer, Seite, Titel, Pfad, Stand und Aktualitätsstatus
 - LLM-Gateway für alle Ollama-Aufrufe, Chat und Embedding. Jeder Aufruf wird als JSON-Zeile
-  protokolliert, bei Verbindungsfehlern bis zu dreimal mit wachsender Pause wiederholt und mit
-  Tokenzahlen, Dauer und Kosten zurückgegeben
+  protokolliert, bei Verbindungsfehlern in insgesamt bis zu drei Versuchen mit wachsender Pause
+  wiederholt und mit Tokenzahlen, Dauer und Kosten zurückgegeben
 - End-to-End-Antwort mit Belegnummern über ein lokales Sprachmodell (`gemma3:12b`)
 - Strukturierte Ausgabe. Das Schema aus den Pydantic-Klassen geht als `format` an Ollama, die
-  Rückgabe wird mit `model_validate_json` geprüft. Pro Spital ein Eintrag mit Aussage und
+  Rückgabe wird mit `model_validate_json` geprüft. Pro Haus ein Eintrag mit Aussage und
   Belegstellennummern
-- Deterministische Prüfung jeder Antwort gegen die gelieferten Belegstellen, vier Regeln
+- Deterministische Strukturprüfung jeder Antwort gegen die Metadaten der Treffer, vier Regeln.
+  Ob eine Aussage inhaltlich gedeckt ist, prüft sie nicht
 - HTTP-Schnittstelle mit FastAPI. `POST /frage` gibt Auskunft, Mängel und Messwerte zurück,
   `GET /gesund` ist ein Lebenszeichen. Die Schnittstellenbeschreibung nach OpenAPI und die
   Oberfläche unter `/docs` entstehen aus denselben Pydantic-Klassen
 - Eval-Set mit 20 Fällen, zu jedem eine vor dem Lauf festgelegte Sollantwort je Haus.
-  Runner misst Retrieval, `frage_beantwortet`, Pflicht- und Verbotsbegriffe, Strukturmängel,
+  Der Runner misst Retrieval, `frage_beantwortet`, Pflicht- und Verbotsbegriffe, Strukturmängel,
   p50 und p95, Tokens und Kosten und schreibt eine CSV je Lauf
 - Tests für Loader und Textbereinigung, Linting mit ruff
 
-**Fehlt noch**
+### Fehlt noch
 
-- Workflow. Das Paket `workflow/` enthält nur seinen Docstring.
+- Workflow mit LangGraph und Kritik-Rolle. Das Paket `workflow/` enthält nur seinen Docstring
 - Anhänge ohne Gliederungsziffer. Die Lohntabelle auf Seite 24 des USB-GAV liegt im Index unter
   einem Abschnitt über Verbandskosten, weil «Anhang 3: Lohntabelle» keine Ziffer trägt und deshalb
-  keinen neuen Abschnitt auslöst. Der Chunk ist über die Vektorsuche nicht auffindbar.
+  keinen neuen Abschnitt auslöst. Der Chunk ist über die Vektorsuche nicht auffindbar
 - Groundedness. Die vier Prüfregeln prüfen die Struktur einer Antwort, nicht ihre Deckung durch
   den zitierten Text. Ein Lauf ohne Mangel enthielt eine Aussage, die in der genannten Belegstelle
-  nicht steht, siehe «Strukturierte Ausgabe und Prüfung».
-- Tests für die Prüfregeln und für die Schnittstelle.
-- Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`.
+  nicht steht, siehe «Strukturierte Ausgabe und Prüfung»
+- Tests für die Prüfregeln und für die Schnittstelle
+- Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`
+- Docker-Image und GitHub-Actions-CI. Beides ist für das Ende des Sprints vorgesehen, heute
+  existiert weder ein Dockerfile noch ein Workflow
 
-**Arbeitsskripte im Wurzelverzeichnis**
+### Arbeitsskripte im Wurzelverzeichnis
 
-Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Alle gitignored.
+Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Alle sind in
+`.gitignore` eingetragen.
 
 - `frage.py` stellt fünf feste Testfragen an den Index und zeigt zu jedem Treffer Abstand, Dokument, Seite, Ziffer, Titel und Textanfang
 - `antworte.py` stellt dieselben fünf Fragen End-to-End über `auskunft.antworte` und druckt Auskunft, Mängel und Messwerte
@@ -81,7 +86,7 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 6. `einbetten` schickt die Texte in Stapeln von 32 an `embed` im Gateway
 7. `baue_index` legt die Chroma-Sammlung neu an und schreibt Vektoren, Zitattext und Metadaten
 8. `embed` in `gateway/llm.py` bettet die Frage ein, `frage_modell` ruft das Sprachmodell. Beide laufen durch
-   `_mit_wiederholung`, das bei Verbindungsfehlern bis zu dreimal nachfasst, mit Pausen von 1 und 2 Sekunden zwischen den Versuchen
+   `_mit_wiederholung`, das bei Verbindungsfehlern insgesamt bis zu drei Versuche unternimmt, mit Pausen von 1 und 2 Sekunden zwischen den Versuchen
 9. Die Antwort entsteht aus Frage, den vier nächsten Chunks als nummerierte Belegstellen und einer Systemnachricht mit Regeln
 10. `protokolliere` schreibt Zeit, Modell, Tokens, Dauer, Versuchsnummer, Kosten und Frage als eine Zeile nach `logs/llm.jsonl`
 11. `antworte` in `auskunft.py` gibt das Schema aus `modelle.py` an das Gateway weiter und prüft die Rückgabe mit `model_validate_json`
@@ -115,7 +120,7 @@ weil der Vektorstore keine Transformationssprache hat und der Chunk beim Schreib
 Einheit sein muss, die später zitiert wird. Der grösste Teil der Arbeit steckt im Transform-Schritt,
 und zwar nicht im Umformen, sondern im Finden der Fälle, die still danebengehen.
 
-Beide PDF sind für Menschen gesetzt und nicht für Maschinen, und jedes bricht
+Beide PDF-Dateien sind für Menschen gesetzt und nicht für Maschinen, und jedes bricht
 auf eigene Art.
 
 **Zeichen normalisieren.** Im USB-PDF stehen die Umlaute zerlegt, also als
@@ -130,10 +135,10 @@ verwirft alles der Unicode-Kategorie Co. Das KSBL-PDF hat beide Probleme nicht,
 an einem einzelnen Dokument wären sie also gar nicht aufgefallen.
 
 **Kopf- und Fusszeilen entfernen.** Statt fester Muster zählt der Loader, auf
-wie vielen Seiten eine Zeile vorkommt, und ersetzt dafür jede Ziffernfolge durch
+wie vielen Seiten eine Zeile vorkommt, und ersetzt dafür zuvor jede Ziffernfolge durch
 ein Rautezeichen. Damit gelten «GAV 1 / 26» und «GAV 2 / 26» als dieselbe Zeile.
 Was auf mindestens 80 Prozent der Seiten steht, fliegt raus. Gemessen liegen
-Kopf- und Fusszeilen bei 95 bis 100 Prozent, die nächsthäufige Zeile bei 10.
+Kopf- und Fusszeilen bei 95 bis 100 Prozent, die nächsthäufige Zeile bei 10 Prozent.
 
 **Inhaltsverzeichnis.** Die Verzeichnisseiten werden nicht erkannt, sondern im
 Korpuseintrag deklariert. Ein früherer Filter versuchte, sie an ihrer Form zu
@@ -189,7 +194,9 @@ sich Änderungen am Code von Zufall unterscheiden lassen.
 
 **Erste Messung an den fünf Testfragen.** Vier von fünf inhaltlich richtig,
 alle fünf mit Belegnummern, rund 1000 Prompt-Tokens und 14 bis 16 Sekunden pro
-Antwort auf einer RTX 5070 Ti. Zwei Befunde daraus.
+Antwort auf einer RTX 5070 Ti. Die Zahlen stammen aus Woche 1, vor strukturierter
+Ausgabe und längerem Systemprompt. Die Baseline weiter unten misst den heutigen
+Stand mit rund der dreifachen Prompt-Länge. Zwei Befunde daraus.
 
 Bei der Frage nach 20 Dienstjahren lag der richtige Chunk auf Platz 2, und die
 Antwort war trotzdem falsch. Aus «10 Tage» wurde «CHF 10», weil die Tabelle im
@@ -208,7 +215,7 @@ und gehört ins Eval-Set.
 Elternurlaub als Antwort aus. Mit der Regel «ein benachbartes Thema ist keine Antwort»
 nannte es ihn korrekt als Elternurlaub, ohne das Fehlen zu melden. Mit der Anweisung,
 das Fehlen zuerst zu melden, liess es beides weg. Mit einem Rollen- und Aufbaublock
-(«nenne immer beide Spitäler») wurden vier von fünf Fragen deutlich besser und die
+(«nenne immer beide Häuser») wurden vier von fünf Fragen deutlich besser und die
 Antwortzeit sank von 35 auf 20 Sekunden, aber der Elternurlaub füllte den KSBL-Platz
 wieder ohne Vermerk. Ein längerer Aufbaublock mit nummerierten Entscheidungsschritten
 machte es schlimmer und lieferte bei der Tabellenfrage «ein Monatslohn» statt «ein
@@ -260,10 +267,10 @@ zulässig sind, statt das Format im Prompt zu erbitten. Die Rückgabe wird ansch
 `model_validate_json` ein zweites Mal geprüft, weil ein anderes Modell oder eine Cloud-API
 sich anders verhalten kann.
 
-Die Form hat zwei Ebenen. `SpitalAuskunft` hält Spital, ob die Belegstellen die Frage
+Die Form hat zwei Ebenen. `SpitalAuskunft` hält das Feld `spital`, ob die Belegstellen die Frage
 beantworten, die Aussage in ganzen Sätzen und die Nummern, auf denen sie beruht. `Auskunft`
 hält die Liste dieser Einträge und einen optionalen Hinweis. Die Belegstellen hängen
-bewusst am einzelnen Spital und nicht an der ganzen Antwort, sonst liesse sich nicht
+bewusst am einzelnen Haus und nicht an der ganzen Antwort, sonst liesse sich nicht
 prüfen, ob eine Aussage über das eine Haus auf einer Belegstelle des anderen beruht.
 
 Mit den Formatregeln aus dem Systemprompt verschwanden auch die eckigen Klammern im
@@ -274,8 +281,8 @@ und verschwand mit einer einzigen Korrektur.
 `pruefe` in `pruefung.py` vergleicht danach die Antwort mit dem, was geliefert wurde. Vier
 Regeln, alle deterministisch und ohne Modellaufruf.
 
-1. Genau ein Eintrag je Spital
-2. Jede genannte Belegstellennummer existiert und stammt aus dem Dokument dieses Spitals
+1. Genau ein Eintrag je Haus
+2. Jede genannte Belegstellennummer existiert und stammt aus dem Dokument dieses Hauses
 3. Wer die Frage beantwortet, nennt eine Belegstelle, wer sie nicht beantwortet, nennt keine
 4. Im Antworttext stehen keine Belegstellennummern in eckigen Klammern
 
@@ -299,7 +306,7 @@ zu erkennen braucht eine zweite Instanz, die jede Aussage gegen ihre Belegstelle
 | `GET` | `/gesund` | Lebenszeichen ohne Modellaufruf |
 | `POST` | `/frage` | Frage beantworten, prüfen und mit Messwerten zurückgeben |
 
-Die Anfrage kommt als `FrageAnfrage` mit der Frage und optional einem Spital. Die Frage ist
+Die Anfrage kommt als `FrageAnfrage` mit der Frage und optional einem Haus. Die Frage ist
 auf 5 bis 500 Zeichen begrenzt, und zwar auf der Serverseite. Eine Grenze, die nur ein
 Client kennt, ist keine Grenze.
 
@@ -312,7 +319,7 @@ Die Signatur `def stelle_frage(anfrage: FrageAnfrage) -> Ergebnis` ist zugleich 
 Spezifikation. Aus ihr entstehen die Prüfung der eingehenden Daten, die Form der Antwort und
 die Beschreibung nach OpenAPI unter `/openapi.json`. Die Oberfläche unter `/docs` zeigt
 diese Beschreibung als bedienbares Formular. Geschrieben ist davon keine Zeile, deshalb kann
-sie auch nicht veralten.
+sie nicht von der Implementierung abweichen.
 
 ```bash
 uv run uvicorn hr_policy_assistant.api.main:app --reload
@@ -325,7 +332,7 @@ uv run uvicorn hr_policy_assistant.api.main:app --reload
 | Vektor-DB | Chroma | pgvector, Qdrant | lokal, kein Betriebsaufwand. Der Zugriff ist heute direkt, ein Repository-Interface für einen späteren Wechsel ist Absicht, nicht Stand |
 | Paketmanager | uv | poetry, pip-tools | schnelle Auflösung und ein Lockfile, das den Neuaufbau reproduzierbar macht |
 | Chunking | Schnitt an Gliederungsziffern | feste Fenster mit Überlappung | der Abschnitt ist die Einheit, die zitiert wird, und der Vertrag ist bereits so gegliedert |
-| Chunk-Splitter | keiner | Obergrenze mit Nachteilung | gemessen liegt je ein Abschnitt pro Dokument über 2000 Zeichen, der Median bei 388 und 434 |
+| Chunk-Splitter | keiner | Obergrenze mit Unterteilung | gemessen liegt je ein Abschnitt pro Dokument über 2000 Zeichen, der Median bei 388 und 434 |
 | Tabellen | über `extract_tables` in Satzform, Seite in Bändern gelesen | Kopfzeile jedem Chunk voranstellen, Tabellenzeilen anhängen | die Zuordnung steht dann im Text selbst und übersteht Chunking und Retrieval, und kein Inhalt steht doppelt |
 | Kopfzeile erkennen | Heuristik über die Zellenlänge, Schwelle 30 | Schriftauszeichnung über `page.chars`, Liste von Hand | ein PDF speichert die Auszeichnung nicht. Die Alternativen sind deutlich mehr Code für drei Tabellen oder beim nächsten Dokument kaputt. Ein Fehlgriff kostet Zuordnung, nicht Inhalt |
 | Embedding-Modell | `bge-m3` über Ollama | multilingual-e5, jina-embeddings-v3 | läuft lokal, muss bei Indexbau und Abfrage identisch sein, ein Wechsel erzwingt den Neuaufbau |
@@ -335,11 +342,11 @@ uv run uvicorn hr_policy_assistant.api.main:app --reload
 | Protokollformat | JSON Lines, eine Zeile pro Aufruf | eine JSON-Datei, SQLite | anhängen ohne Lesen, Zeile für Zeile auswertbar, im Editor lesbar |
 | Wiederholung | 3 Versuche, Pausen 1 und 2 s, nur Verbindungsfehler | alles wiederholen, nie wiederholen | vorübergehende Fehler überbrücken, dauerhafte sofort sichtbar machen |
 | Strukturierte Ausgabe | JSON-Schema als `format` an Ollama, danach Validierung | Zitatformat im Prompt erbitten, Antwort mit regulären Ausdrücken zerlegen | fünf Prompt-Fassungen haben das Format nicht erzwungen, ein Schema tut es. Die Validierung bleibt, weil ein anderes Modell sich anders verhalten kann |
-| Belegstellen | je Spital statt je Antwort | flaches Feld über die ganze Antwort | nur so ist prüfbar, ob eine Aussage über ein Haus auf einer Belegstelle des anderen beruht |
+| Belegstellen | je Haus statt je Antwort | flaches Feld über die ganze Antwort | nur so ist prüfbar, ob eine Aussage über ein Haus auf einer Belegstelle des anderen beruht |
 | Prüfung | eigenes Modul, deterministisch, vier Regeln | Prüfung im Prompt, Prüfung durch ein zweites Modell | gleiche Eingabe, gleiches Ergebnis, begründbar und ohne Kosten. Ein Modell für diese Aufgabe wäre teurer und unzuverlässiger |
 | Mängel in der Antwort | mit Status 200 zurückgeben | Fehlercode werfen, Mängel verschweigen | ein Mangel ist keine gescheiterte Anfrage. Verschweigen wäre schlimmer als benennen |
 | Schema im Gateway | als `dict` übergeben | Gateway kennt Pydantic | das Gateway bleibt die eine Stelle zu Ollama und muss über den Rest des Programms nichts wissen |
-| Workflow vs. Agent |  |  |  |
+| Workflow vs. Agent | offen | fester Graph, Agent-Loop | wird nach dem LangGraph-Aufbau entschieden und hier mit Messwerten nachgetragen |
 
 ## Evals
 
@@ -365,7 +372,7 @@ gemma3:12b, temperature 0, fünf Läufe. Massgeblich ist der fünfte.
 
 | Kennzahl | Wert | von |
 |---|---|---|
-| Erwartete Ziffer unter den Treffern | 28 | 31 Seiten mit erwarteter Ziffer |
+| Erwartete Ziffer unter den Treffern | 28 | 31 Antworten mit erwarteter Ziffer |
 | `frage_beantwortet` stimmt | 38 | 40 |
 | Pflichtbegriffe vollständig | 35 | 40 |
 | Verbotsbegriffe, keiner gefunden | 38 | 40 |
@@ -374,14 +381,14 @@ gemma3:12b, temperature 0, fünf Läufe. Massgeblich ist der fünfte.
 | Tokens ein / aus | 30338 / 4226 | 20 Fragen |
 | Kosten | CHF 0.000000 | lokal |
 
-Neun der vierzig Seiten haben keine erwartete Ziffer, weil das jeweilige Haus das Thema nicht
+Neun der vierzig Antworten haben keine erwartete Ziffer, weil das jeweilige Haus das Thema nicht
 regelt. Sie zählen bei der Retrieval-Quote nicht mit, sonst würde gegen eine Grundgesamtheit
 gerechnet, in der es nichts zu treffen gibt. Verfehlt wurden drei Ziffern.
 
 ### Was die Zahlen gezeigt haben
 
-**Reproduzierbarkeit.** Vier Läufe lieferten aufs Token identische Werte, 30338 hinein und
-4226 hinaus, und alle fünf dieselben zwölf Strukturmängel bei identischen Quoten. Temperature 0 arbeitet über den ganzen Katalog
+**Reproduzierbarkeit.** Alle fünf Läufe lieferten aufs Token identische Werte, 30338 hinein und
+4226 hinaus, und dieselben zwölf Strukturmängel bei identischen Quoten. Temperature 0 arbeitet über den ganzen Katalog
 reproduzierbar, nicht nur über fünf Fragen.
 
 **Die Halluzination ist noch da.** Der Chefärzte-Fall antwortet, Chefärzte seien den Führungs-
@@ -413,9 +420,12 @@ nichts Neues. Das ist die Aufgabe der Kritik-Rolle, und der Chefärzte-Fall ist 
 | Setup | Ziffer getroffen | Pflichtbegriffe | Verbotsbegriffe | Strukturmängel | CHF/Anfrage | p95 |
 |---|---|---|---|---|---|---|
 | Baseline (naives RAG) | 28/31 | 35/40 | 38/40 | 12 | 0.000000 | 46.2 s |
-| LangGraph + Kritik-Rolle |  |  |  |  |  |  |
-| Agent-Loop |  |  |  |  |  |  |
-| On-Premise gegen Cloud |  |  |  |  |  |  |
+| LangGraph + Kritik-Rolle | – | – | – | – | – | – |
+| Agent-Loop | – | – | – | – | – | – |
+| On-Premise gegen Cloud | – | – | – | – | – | – |
+
+Die offenen Zeilen werden gefüllt, sobald der jeweilige Aufbau steht und am selben Eval-Set
+gemessen ist.
 
 Aus Woche 1 zusätzlich die Retrieval-Precision, an fünf Testfragen von Hand beurteilt, k=2
 gleich 1.0 und k=4 zwischen 0.6 und 0.7. Fünf Fragen sind eine kleine Stichprobe, die Zahl ist
@@ -433,7 +443,7 @@ ollama pull gemma3:12b
 ```
 
 Der Korpus liegt nicht im Repository, weil ein GAV ein privatrechtlicher Vertrag
-der Sozialpartner ist und kein amtliches Werk. Beide PDF müssen von Hand nach
+der Sozialpartner ist und kein amtliches Werk. Beide PDF-Dateien müssen von Hand nach
 `data/raw/` gelegt werden, unter genau diesen Dateinamen.
 
 | Datei | Dokument |
