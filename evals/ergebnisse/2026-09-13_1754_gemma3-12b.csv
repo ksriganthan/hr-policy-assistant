@@ -1,0 +1,21 @@
+﻿id;kategorie;frage;dauer_gesamt_s;dauer_modell_s;tokens_prompt;tokens_antwort;kosten_chf;maengel_anzahl;maengel;usb_ziffer;usb_beantwortet_ok;usb_muss_fehlend;usb_verboten;ksbl_ziffer;ksbl_beantwortet_ok;ksbl_muss_fehlend;ksbl_verboten
+1;nachbarthema;Gilt der GAV für Chefärzte?;30.98;28.41;1401;193;0.0;0;;True;True;betrieblich;;True;True;;
+2;tabelle;Was bekomme ich nach 20 Dienstjahren?;32.43;29.21;1804;201;0.0;0;;True;True;;;True;True;;
+3;nachbarthema;Wie ist der Vaterschaftsurlaub geregelt?;34.84;31.63;1211;236;0.0;0;;True;True;;;False;True;10;zwölf Monaten
+4;nachbarthema;Wie lange ist die Kündigungsfrist während der Probezeit?;30.51;27.32;1198;189;0.0;0;;True;True;;;True;True;;
+5;beide;Gilt der GAV für Praktikanten?;30.12;26.8;1477;177;0.0;0;;True;True;;;True;True;;
+6;beide;Wie lange dauert die Probezeit?;27.99;24.96;1192;162;0.0;0;;True;True;;;True;True;;
+7;beide;Wie lange ist die Kündigungsfrist nach der Probezeit?;31.6;28.42;1198;199;0.0;0;;True;True;1 Monat | 3 Monate;;True;True;;
+8;beide;Wie viele Ferientage habe ich pro Jahr?;34.83;31.54;1261;238;0.0;0;;True;True;;;True;True;;
+9;beide;Habe ich Anspruch auf einen dreizehnten Monatslohn?;34.38;31.02;1143;226;0.0;0;;True;True;;;True;True;;
+10;beide;Wie lange wird der Lohn bei Krankheit weiterbezahlt?;43.54;40.23;1499;332;0.0;1;KSBL nennt Belegstelle 4 aus USB;True;True;;;True;True;;
+11;beide;Wie hoch ist die Abfindung bei einer Kündigung?;35.86;32.56;1209;250;0.0;0;;True;True;;;True;True;;
+12;beide;Darf ich eine Nebenbeschäftigung ausüben?;39.78;36.48;1791;285;0.0;0;;True;True;;;True;True;;
+13;nur_eines;Zählt die Umkleidezeit als Arbeitszeit?;27.99;24.69;1746;148;0.0;1;USB beantwortet die Frage nicht, nennt aber [1, 2, 4];True;True;Arbeitszeitreglement;;;True;;
+14;nur_eines;Habe ich Anspruch auf ein Arbeitszeugnis?;30.93;27.85;1716;179;0.0;0;;;True;;;True;True;;
+15;nur_eines;Darf ich das Geschäftsnotebook privat nutzen?;27.75;24.43;1321;154;0.0;4;USB nennt Belegstelle 2 aus KSBL | USB beantwortet die Frage nicht, nennt aber [1, 2, 4] | KSBL nennt Belegstelle 4 aus USB | KSBL beantwortet die Frage nicht, nennt aber [2, 3, 4];;True;;;False;False;ICT | Reglement;
+16;nur_eines;Bekomme ich eine Treueprämie?;49.96;46.59;1577;401;0.0;0;;;False;;;True;True;;
+17;keines;Habe ich Anspruch auf Homeoffice?;30.22;26.89;1857;171;0.0;6;USB nennt Belegstelle 2 aus KSBL | USB nennt Belegstelle 3 aus KSBL | USB beantwortet die Frage nicht, nennt aber [1, 2, 3, 4] | KSBL nennt Belegstelle 1 aus USB | KSBL nennt Belegstelle 4 aus USB | KSBL beantwortet die Frage nicht, nennt aber [1, 2, 3, 4];;True;;;;True;;
+18;tabelle;Wie viele freie Tage bekomme ich bei meiner Heirat?;32.47;29.29;1797;198;0.0;0;;True;True;2;;True;True;3;
+19;tabelle;Was ist das Bandminimum im Lohnband 5?;28.2;25.01;2099;144;0.0;0;;False;True;;;False;True;Anhang;
+20;keines;Zahlt der Arbeitgeber einen Beitrag an die Verpflegung?;27.59;24.37;1841;143;0.0;0;;;True;;;;True;;

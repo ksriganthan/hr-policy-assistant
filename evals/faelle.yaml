@@ -1,0 +1,138 @@
+# Eval-Fälle für hr-policy-assistant, Stand 13.09.2026
+# Fachliche Quelle ist der Fragenkatalog im Sprint-Vault. Wer hier etwas ändert,
+# ändert es dort mit, sonst driften Sollantwort und Begründung auseinander.
+#
+# ziffer: als Text, sonst liest YAML 2.3.10 und 5 als Zahlen und der Vergleich
+#         mit m['nummer'] aus Chroma matcht nie.
+# ziffer: null bedeutet, dass dieses Haus nichts dazu regelt. Solche Seiten
+#         zählen bei der Retrieval-Trefferquote nicht mit.
+
+- id: 1
+  frage: Gilt der GAV für Chefärzte?
+  kategorie: nachbarthema
+  # 13.09.2026: darf_nicht korrigiert. "Chefärzte sind ausgenommen" war ein ganzer Satz und
+  # hat die echte Halluzination durchgelassen, weil das Modell "und somit ausgenommen sind"
+  # schreibt. "zugeordnet" und "zählen zu" treffen die Aussage statt einer Formulierung.
+  usb:  {ziffer: "1.3", beantwortet: true, muss: [Führungs- und Fachkader, betrieblich], darf_nicht: [zugeordnet, zählen zu, gehören zu, Chefärztinnen]}
+  ksbl: {ziffer: "5",   beantwortet: true, muss: [Chefärzte, nicht], darf_nicht: []}
+
+- id: 2
+  frage: Was bekomme ich nach 20 Dienstjahren?
+  kategorie: tabelle
+  usb:  {ziffer: "2.5.9",  beantwortet: true, muss: ["10", Monatslohn], darf_nicht: ["3'000", CHF]}
+  ksbl: {ziffer: "12.15", beantwortet: true, muss: ["3'000"], darf_nicht: [Monatslohn]}
+
+- id: 3
+  frage: Wie ist der Vaterschaftsurlaub geregelt?
+  kategorie: nachbarthema
+  usb:  {ziffer: "2.5.6",  beantwortet: true, muss: [10 Tage], darf_nicht: []}
+  ksbl: {ziffer: "11.13", beantwortet: true, muss: ["10"], darf_nicht: [Elternurlaub, zwölf Monaten]}
+
+- id: 4
+  frage: Wie lange ist die Kündigungsfrist während der Probezeit?
+  kategorie: nachbarthema
+  usb:  {ziffer: "2.2",  beantwortet: true, muss: [7 Tage, Kalenderwoche], darf_nicht: [3 Monate, 1 Monat]}
+  ksbl: {ziffer: "10.3", beantwortet: true, muss: [sieben Kalendertagen], darf_nicht: [drei Monaten]}
+
+- id: 5
+  frage: Gilt der GAV für Praktikanten?
+  kategorie: beide
+  usb:  {ziffer: "1.3", beantwortet: true, muss: [Praktikanten, Ausbildung], darf_nicht: []}
+  ksbl: {ziffer: "5",   beantwortet: true, muss: [Praktikanten], darf_nicht: []}
+
+- id: 6
+  frage: Wie lange dauert die Probezeit?
+  kategorie: beide
+  usb:  {ziffer: "2.2",  beantwortet: true, muss: [3 Monate], darf_nicht: [7 Tage]}
+  ksbl: {ziffer: "10.3", beantwortet: true, muss: [drei Monate], darf_nicht: [sieben]}
+
+- id: 7
+  frage: Wie lange ist die Kündigungsfrist nach der Probezeit?
+  kategorie: beide
+  # 13.09.2026: muss korrigiert. Das Modell schreibt Zahlen aus ("einen Monat"), die
+  # Pflichtbegriffe standen als Ziffern da und massen damit Schreibweise statt Inhalt.
+  usb:  {ziffer: "2.3.3", beantwortet: true, muss: [Monat, Monate, Anstellungsjahr], darf_nicht: [7 Tage]}
+  ksbl: {ziffer: "10.6",  beantwortet: true, muss: [drei Monaten, Monatsende], darf_nicht: [1 Monat, erstes Jahr]}
+
+- id: 8
+  frage: Wie viele Ferientage habe ich pro Jahr?
+  kategorie: beide
+  usb:  {ziffer: "2.5.1.1", beantwortet: true, muss: ["25", "50."], darf_nicht: [30 Arbeitstage]}
+  ksbl: {ziffer: "11.7",    beantwortet: true, muss: ["25", "30"], darf_nicht: ["32"]}
+
+- id: 9
+  frage: Habe ich Anspruch auf einen dreizehnten Monatslohn?
+  kategorie: beide
+  usb:  {ziffer: "2.6.3",  beantwortet: true, muss: ["13", pro rata], darf_nicht: [November]}
+  ksbl: {ziffer: "12.13", beantwortet: true, muss: ["13.", November], darf_nicht: []}
+
+- id: 10
+  frage: Wie lange wird der Lohn bei Krankheit weiterbezahlt?
+  kategorie: beide
+  usb:  {ziffer: "2.7.1", beantwortet: true, muss: ["730", "100"], darf_nicht: []}
+  ksbl: {ziffer: "13.5",  beantwortet: true, muss: ["730", "100"], darf_nicht: []}
+
+- id: 11
+  frage: Wie hoch ist die Abfindung bei einer Kündigung?
+  kategorie: beide
+  usb:  {ziffer: "2.3.10", beantwortet: true, muss: [Lebensalter, Anstellungsdauer], darf_nicht: [zwölf Monatslöhne, 12 Monatslöhne]}
+  ksbl: {ziffer: "10.10",  beantwortet: true, muss: [zwölf Monatslöhne, maximal], darf_nicht: []}
+
+- id: 12
+  frage: Darf ich eine Nebenbeschäftigung ausüben?
+  kategorie: beide
+  usb:  {ziffer: "2.8.6", beantwortet: true, muss: [bewilligungspflichtig, Interessenskollision], darf_nicht: []}
+  ksbl: {ziffer: "14.7",  beantwortet: true, muss: [bewilligungspflichtig], darf_nicht: []}
+
+- id: 13
+  frage: Zählt die Umkleidezeit als Arbeitszeit?
+  kategorie: nur_eines
+  usb:  {ziffer: "2.4.12", beantwortet: false, muss: [Arbeitszeitreglement], darf_nicht: [gilt als Arbeitszeit, wird angerechnet]}
+  ksbl: {ziffer: null,     beantwortet: false, muss: [], darf_nicht: [Umkleidezeit]}
+
+- id: 14
+  frage: Habe ich Anspruch auf ein Arbeitszeugnis?
+  kategorie: nur_eines
+  usb:  {ziffer: null,   beantwortet: false, muss: [], darf_nicht: [Zwischenzeugnis, Schlusszeugnis]}
+  ksbl: {ziffer: "14.9", beantwortet: true,  muss: [Schlusszeugnis, Zwischenzeugnis], darf_nicht: []}
+
+- id: 15
+  frage: Darf ich das Geschäftsnotebook privat nutzen?
+  kategorie: nur_eines
+  usb:  {ziffer: null,   beantwortet: false, muss: [], darf_nicht: [ICT, Internet-Zugang]}
+  ksbl: {ziffer: "14.6", beantwortet: true,  muss: [ICT, Reglement], darf_nicht: []}
+
+- id: 16
+  frage: Bekomme ich eine Treueprämie?
+  kategorie: nur_eines
+  usb:  {ziffer: null,    beantwortet: false, muss: [], darf_nicht: ["1'500", "3'000", "5'000"]}
+  ksbl: {ziffer: "12.15", beantwortet: true,  muss: [Dienstjahren, CHF], darf_nicht: []}
+
+- id: 17
+  frage: Habe ich Anspruch auf Homeoffice?
+  kategorie: keines
+  usb:  {ziffer: null, beantwortet: false, muss: [], darf_nicht: [Homeoffice, Telearbeit, Anspruch]}
+  ksbl: {ziffer: null, beantwortet: false, muss: [], darf_nicht: [Homeoffice, Telearbeit, Anspruch]}
+
+- id: 18
+  frage: Wie viele freie Tage bekomme ich bei meiner Heirat?
+  kategorie: tabelle
+  usb:  {ziffer: "2.5.3",  beantwortet: true, muss: [zwei, Arbeitstage], darf_nicht: [drei Arbeitstage]}   # 13.09.: Zahlen ausgeschrieben, siehe Fall 7
+  ksbl: {ziffer: "11.13", beantwortet: true, muss: [drei, Arbeitstage], darf_nicht: [zwei Arbeitstage]}
+
+- id: 19
+  frage: Was ist das Bandminimum im Lohnband 5?
+  kategorie: tabelle
+  # 13.09.2026: ziffer von "Anhang 3" auf null geaendert. Befund aus Lauf 1: die
+  # Lohntabelle auf S.24 steht im Index unter Ziff. 2 "Kosten fuer Weiterentwicklung
+  # und Vollzug des GAV" (S.22), weil die Zeile "Anhang 3: Lohntabelle" keine
+  # Gliederungsziffer hat und deshalb keinen neuen Abschnitt ausloest. Einen Chunk
+  # "Anhang 3" gibt es nicht. Die muss-Begriffe bleiben, sie messen das Entscheidende.
+  usb:  {ziffer: null, beantwortet: true,  muss: ["55", "549"], darf_nicht: ["91", "656"]}
+  ksbl: {ziffer: "12.2",     beantwortet: false, muss: [Anhang], darf_nicht: ["55", Bandminimum]}
+
+- id: 20
+  frage: Zahlt der Arbeitgeber einen Beitrag an die Verpflegung?
+  kategorie: keines
+  usb:  {ziffer: null, beantwortet: false, muss: [], darf_nicht: [Verpflegung, Kantine, Beitrag]}
+  ksbl: {ziffer: null, beantwortet: false, muss: [], darf_nicht: [Verpflegung, Kantine, Beitrag]}
