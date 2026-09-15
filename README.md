@@ -40,8 +40,11 @@ solche erkennbar ist.
 - Strukturierte Ausgabe. Das Schema aus den Pydantic-Klassen geht als `format` an Ollama, die
   Rückgabe wird mit `model_validate_json` geprüft. Pro Haus ein Eintrag mit Aussage und
   Belegstellennummern
-- Deterministische Strukturprüfung jeder Antwort gegen die Metadaten der Treffer, vier Regeln.
-  Ob eine Aussage inhaltlich gedeckt ist, prüft sie nicht
+- Deterministische Strukturprüfung jeder Antwort gegen die Metadaten der Treffer, vier Regeln
+  mit sechs Mängelmeldungen. Ob eine Aussage inhaltlich gedeckt ist, prüft sie nicht
+- Workflow über LangGraph mit vier Knoten und einem bedingten Rücksprung. Ein Kritik-Knoten
+  liest jeden Entwurf gegen die Belegstellen und gibt strukturiert zurück, welche Aussage nicht
+  gedeckt ist. Bei Beanstandung geht der Graph einmal zurück zum Entwurf
 - HTTP-Schnittstelle mit FastAPI. `POST /frage` gibt Auskunft, Mängel und Messwerte zurück,
   `GET /gesund` ist ein Lebenszeichen. Die Schnittstellenbeschreibung nach OpenAPI und die
   Oberfläche unter `/docs` entstehen aus denselben Pydantic-Klassen
@@ -52,13 +55,14 @@ solche erkennbar ist.
 
 ### Fehlt noch
 
-- Workflow mit LangGraph und Kritik-Rolle. Das Paket `workflow/` enthält nur seinen Docstring
 - Anhänge ohne Gliederungsziffer. Die Lohntabelle auf Seite 24 des USB-GAV liegt im Index unter
   einem Abschnitt über Verbandskosten, weil «Anhang 3: Lohntabelle» keine Ziffer trägt und deshalb
   keinen neuen Abschnitt auslöst. Der Chunk ist über die Vektorsuche nicht auffindbar
-- Groundedness. Die vier Prüfregeln prüfen die Struktur einer Antwort, nicht ihre Deckung durch
-  den zitierten Text. Ein Lauf ohne Mangel enthielt eine Aussage, die in der genannten Belegstelle
-  nicht steht, siehe «Strukturierte Ausgabe und Prüfung»
+- Ein verlässlicher Kritiker. Der Knoten steht und hat die bekannte Halluzination gefangen,
+  liegt aber im Lauf vom 15.09. in vier von vier offenen Beanstandungen falsch, siehe
+  «Workflow mit Kritik-Rolle»
+- Das Rauschband der Kennzahlen. Solange nicht gemessen ist, wie stark die Zahlen ohne jede
+  Änderung schwanken, ist ein Unterschied von einer Einheit in 40 nicht interpretierbar
 - Tests für die Prüfregeln und für die Schnittstelle
 - Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`
 - Docker-Image und GitHub-Actions-CI. Beides ist für das Ende des Sprints vorgesehen, heute
@@ -75,6 +79,8 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 - `messung.py` misst pro Dokument die Anzahl Abschnitte und die Längenverteilung
 - `test_embed.py` und `test_llm.py` prüfen die Ollama-Verbindung für Embedding und Sprachmodell
 - `kosten.py` liest das Protokoll und zeigt pro Aufruf Tokens, Dauer und Kosten sowie die Summen
+- `teste_graph.py` schickt den Chefärzte-Fall einmal durch den Graphen und druckt den Verlauf
+  jeder Runde, also den Abnahmetest von Hand
 
 ## Architektur
 
@@ -92,6 +98,7 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 11. `antworte` in `auskunft.py` gibt das Schema aus `modelle.py` an das Gateway weiter und prüft die Rückgabe mit `model_validate_json`
 12. `pruefe` in `pruefung.py` vergleicht die Auskunft mit den Metadaten der Treffer und gibt eine Liste von Mängeln zurück
 13. `stelle_frage` in `api/main.py` setzt Auskunft, Mängel und Messwerte zu einem `Ergebnis` zusammen und gibt es als JSON zurück
+14. `antworte_mit_kritik` in `workflow/graph.py` ist der zweite Weg zu einer Antwort. Er führt dieselben Schritte in vier Knoten aus und schiebt zwischen Entwurf und Prüfung eine Kritik ein
 
 ### Ablauf einer Anfrage
 
@@ -297,6 +304,79 @@ anderswo benannt werden. Richtiges Dokument, richtige Nummer, alle vier Regeln g
 nicht gedeckt. Deckung zu messen braucht ein Eval-Set mit Sollantworten, und sie im Betrieb
 zu erkennen braucht eine zweite Instanz, die jede Aussage gegen ihre Belegstelle hält.
 
+## Workflow mit Kritik-Rolle
+
+Der zweite Weg zu einer Antwort, `workflow/graph.py`. Dieselben Schritte, aber als Zustandsautomat
+mit vier Knoten und einer bedingten Kante.
+
+```
+suchen ──► entwerfen ──► kritisieren ──► pruefen
+              ▲                │
+              └────────────────┘
+               nur bei Beanstandung und freiem Budget
+```
+
+`suchen` holt die vier Treffer. `entwerfen` erzeugt die `Auskunft` wie `antworte()`, hängt aber
+die Beanstandungen der Vorrunde als Zusatzauftrag an den Prompt. `kritisieren` legt den Entwurf
+neben die Belegstellen und gibt ein `Kritik`-Objekt zurück mit `gedeckt`, den beanstandeten
+Sätzen im Wortlaut und einer Begründung. `pruefen` ruft `pruefe()` und beendet den Lauf.
+
+Der Zustand ist ein `TypedDict` mit zehn Feldern, darunter `runde`, `verlauf` für das Mitlesen
+und `aufrufe`, über das der Eval-Runner die Tokens mehrerer Modellaufrufe summiert. Knoten geben
+keine fertigen Ergebnisse zurück, sondern Änderungsmeldungen, die LangGraph in den Zustand
+einträgt.
+
+**Der Kritiker hat kein Vetorecht.** Nach `MAX_RUNDEN` geht der Graph zu `pruefen`, und die
+letzte Fassung zählt, auch wenn noch Beanstandungen offen sind. Das war zunächst eine
+Vorsichtsmassnahme und hat sich als notwendig erwiesen.
+
+### Was der Kritiker gebracht hat
+
+Der Abnahmetest ist der Chefärzte-Fall. Vorher:
+
+> Der GAV gilt für Chefärzte am Universitätsspital Basel nicht, da diese der Gruppe der Führungs-
+> und Fachkader gemäss spitalspezifischer Regelung des Verwaltungsrats angehören.
+
+Nachher, nach einem Rücksprung:
+
+> Dem GAV sind nicht unterstellt: a. Mitglieder der Geschäfts- bzw. Spitalleitung, b. Führungs-
+> und Fachkader gemäss spitalspezifischer Regelung des Verwaltungsrats (Funktionen werden
+> betrieblich benannt.) und c. Personal in Ausbildung und Praktikanten. Chefärzte werden in den
+> genannten Ausnahmen nicht explizit genannt.
+
+Der Verlauf zeigt die Kette. Der erste Entwurf enthielt die Halluzination wörtlich, der Kritiker
+beanstandete genau diesen Satz, der zweite Entwurf nennt die Kategorien ohne Zuordnung. Die
+falsche Aussage ist durch eine belegte ersetzt und nicht durch ein Schweigen, und das war die
+Anforderung: ein Vergleichslauf mit mehr Kontext hatte dieselbe Halluzination zwar entfernt,
+aber nur, indem das Modell die Auskunft verweigerte.
+
+### Was er nicht kann, gemessen am 15.09.2026
+
+Von zwanzig Fällen lösten acht einen Rücksprung aus, vier davon enden mit `gedeckt = False`. **In
+allen vier ist die beanstandete Aussage richtig**, drei davon sind fast wörtliche Zitate aus der
+Belegstelle. Der klarste Fall ist die Abgangsentschädigung:
+
+| | |
+|---|---|
+| Antwort | «Die Abgangsentschädigung beträgt maximal zwölf Monatslöhne.» |
+| Kritiker | beanstandet genau diesen Satz |
+| KSBL Ziff. 10.10 | «Die Abgangsentschädigung beträgt maximal zwölf Monatslöhne.» |
+
+Drei Gegenproben: der Satz steht wörtlich im GAV, die Ziffer war unter den vier Treffern, und das
+Eval-Set verlangt für dieses Haus genau diese Begriffe. Der Kritiker beanstandet, was laut der
+vorab festgelegten Sollantwort dort stehen muss.
+
+Drei der vier Fehlalarme betreffen Zahlen, Fristen oder Beträge. Genau diese Sorte nennt
+`KRITIK_SYSTEM` als Fehlerart, und das einzige Negativbeispiel im Prompt ist ebenfalls ein
+Betrag. Die naheliegende Erklärung ist, dass das Modell aus Regel und Beispiel eine Abkürzung
+gelernt hat, also Beträge als verdächtige Sorte behandelt statt den Einzelfall zu prüfen. Das ist
+nicht gemessen, sondern aus der Verteilung geschlossen. Die Messung dazu ist der erste Punkt der
+nächsten Woche.
+
+**Deshalb misst die Kennzahl «am Ende nicht gedeckt» in dieser Fassung Fehlalarme, nicht
+ungedeckte Antworten.** Und deshalb ist es gut, dass der Kritiker nicht verwerfen darf. Mit
+Vetorecht hätte dieser Lauf vier richtige Antworten weggeworfen.
+
 ## API
 
 `api/main.py` stellt zwei Endpunkte bereit.
@@ -387,9 +467,20 @@ gerechnet, in der es nichts zu treffen gibt. Verfehlt wurden drei Ziffern.
 
 ### Was die Zahlen gezeigt haben
 
-**Reproduzierbarkeit.** Alle fünf Läufe lieferten aufs Token identische Werte, 30338 hinein und
-4226 hinaus, und dieselben zwölf Strukturmängel bei identischen Quoten. Temperature 0 arbeitet über den ganzen Katalog
-reproduzierbar, nicht nur über fünf Fragen.
+**Reproduzierbarkeit, am 16.09. eingeschränkt.** Alle fünf Läufe vom 13.09. lieferten aufs Token
+identische Werte, 30338 hinein und 4226 hinaus, und dieselben zwölf Strukturmängel. Daraus stand
+hier, temperature 0 arbeite über den ganzen Katalog reproduzierbar. **Das gilt nicht allgemein.**
+Am 16.09. lieferten zwei Läufe mit identischem Code verschiedene Antworten, unter anderem bei
+Fällen, die gar keinen Rücksprung machten und deshalb von der einzigen Codeänderung nicht berührt
+sein konnten.
+
+Was gesichert ist: die **Eingabe**-Tokens sind stabil, an mehreren Tagen exakt 30338. Suche und
+Prompt sind deterministisch. Was schwankt, ist die Generierung, und zwar unregelmässig. Mehrere
+Läufe hintereinander können zeichengleich sein und der nächste nicht.
+
+**Folge für jede Zahl in diesem Abschnitt.** Ein Unterschied von einer Einheit in 40 ist kein
+Ergebnis, solange das Rauschband nicht gemessen ist. Das steht als offener Punkt unter «Fehlt
+noch».
 
 **Die Halluzination ist noch da.** Der Chefärzte-Fall antwortet, Chefärzte seien den Führungs-
 und Fachkadern zugeordnet. USB Ziff. 1.3 nennt sie nicht und hält fest, dass die Funktionen
@@ -419,13 +510,20 @@ nichts Neues. Das ist die Aufgabe der Kritik-Rolle, und der Chefärzte-Fall ist 
 
 | Setup | Ziffer getroffen | Pflichtbegriffe | Verbotsbegriffe | Strukturmängel | CHF/Anfrage | p95 |
 |---|---|---|---|---|---|---|
-| Baseline (naives RAG) | 28/31 | 35/40 | 38/40 | 12 | 0.000000 | 46.2 s |
-| LangGraph + Kritik-Rolle | – | – | – | – | – | – |
+| Baseline (naives RAG), 13.09. | 28/31 | 35/40 | 38/40 | 12 | 0.000000 | 46.2 s |
+| dieselbe mit Belegstellen-Regel, 14.09. | 28/31 | 34/40 | 39/40 | 0 | 0.000000 | 39.3 s |
+| LangGraph + Kritik-Rolle, 15.09. | 28/31 | 35/40 | 38/40 | 1 | 0.000000 | 119.0 s |
 | Agent-Loop | – | – | – | – | – | – |
 | On-Premise gegen Cloud | – | – | – | – | – | – |
 
 Die offenen Zeilen werden gefüllt, sobald der jeweilige Aufbau steht und am selben Eval-Set
 gemessen ist.
+
+**Der Graph kostet dreimal so viel Kontext**, 90610 Eingabe-Tokens gegen 30338, und
+zweieinhalbmal so viel Ausgabe. Dafür ist der Chefärzte-Fall inhaltlich richtig geworden. Ob die
+Differenzen von einer Einheit in den übrigen Spalten etwas bedeuten, ist offen, siehe die
+Einschränkung zur Reproduzierbarkeit weiter oben. Die Zeile steht hier mit dieser Einschränkung
+und nicht als Fortschrittsmeldung.
 
 Aus Woche 1 zusätzlich die Retrieval-Precision, an fünf Testfragen von Hand beurteilt, k=2
 gleich 1.0 und k=4 zwischen 0.6 und 0.7. Fünf Fragen sind eine kleine Stichprobe, die Zahl ist
