@@ -16,6 +16,7 @@ import yaml
 from hr_policy_assistant.auskunft import antworte
 from hr_policy_assistant.config import PROJEKT_WURZEL
 from hr_policy_assistant.pruefung import pruefe
+from hr_policy_assistant.workflow.graph import antworte_mit_kritik    # statt: from ...auskunft import antworte
 
 FAELLE = PROJEKT_WURZEL / "evals" / "faelle.yaml"
 ERGEBNISSE = PROJEKT_WURZEL / "evals" / "ergebnisse"
@@ -39,8 +40,12 @@ def vereinheitliche(text: str) -> str:
 
 
 def enthaelt(text: str, begriff: str) -> bool:
-    """Sucht einen Begriff im Text, ohne Ruecksicht auf Gross- und Kleinschreibung."""
-    return vereinheitliche(begriff).lower() in vereinheitliche(text).lower()
+    """Sucht einen Begriff im Text. Ein Pipe trennt gleichwertige Schreibweisen,
+    "zwei|2" gilt als gefunden, sobald eine der beiden Formen vorkommt.
+    """
+    inhalt = vereinheitliche(text).lower()                    # einmal umwandeln, nicht je Variante
+    varianten = vereinheitliche(begriff).lower().split("|")   # "zwei|2" wird zu ["zwei", "2"]
+    return any(v in inhalt for v in varianten)                # eine einzige reicht
 
 
 def finde_haus(auskunft, haus: str):
@@ -63,26 +68,31 @@ def perzentil(werte: list[float], p: float) -> float:
 # ── Messen ───────────────────────────────────────────────────
 
 def frage_stellen(fall: dict) -> dict | None:
-    """Stellt eine Frage und gibt die Rohdaten zurueck. None bei Absturz."""
+    """Stellt eine Frage ueber den Graphen und gibt die Rohdaten zurueck. None bei Absturz."""
     start = time.perf_counter()
     try:
-        auskunft, a, treffer = antworte(fall["frage"])
+        e = antworte_mit_kritik(fall["frage"])        # Endzustand des Graphen, ein dict
     except Exception as fehler:
         print(f"  Fall {fall['id']} abgestuerzt: {type(fehler).__name__}: {fehler}")
         return None
     dauer_gesamt = time.perf_counter() - start
 
+    aufrufe = e["aufrufe"]                            # zwei bis vier Stueck, je nach Ruecksprung
+
     return {
         "fall": fall,
-        "auskunft": auskunft,
-        "treffer": treffer,
-        "maengel": pruefe(auskunft, treffer),
-        "modell": a.modell,
-        "dauer_modell_s": a.dauer_s,
+        "auskunft": e["auskunft"],
+        "treffer": e["treffer"],
+        "maengel": e["maengel"],                      # pruefe() lief schon im Graphen
+        "modell": aufrufe[0].modell,
+        "dauer_modell_s": round(sum(a.dauer_s for a in aufrufe), 2),
         "dauer_gesamt_s": round(dauer_gesamt, 2),
-        "tokens_prompt": a.tokens_prompt,
-        "tokens_antwort": a.tokens_antwort,
-        "kosten_chf": a.kosten_chf,
+        "tokens_prompt": sum(a.tokens_prompt for a in aufrufe),
+        "tokens_antwort": sum(a.tokens_antwort for a in aufrufe),
+        "kosten_chf": sum(a.kosten_chf for a in aufrufe),
+        "runde": e["runde"],                          # NEU: 1 heisst kein Ruecksprung, 2 heisst einer
+        "gedeckt": e["kritik"].gedeckt,               # NEU: Urteil des Kritikers am Ende
+        "beanstandungen": e["beanstandungen"],        # NEU: was am Ende offen blieb
     }
 
 
@@ -123,6 +133,7 @@ def schreibe_csv(rohdaten: list[dict], bewertungen: list[dict], modell: str) -> 
 
     spalten = [
         "id", "kategorie", "frage",
+        "runde", "gedeckt", "beanstandungen",  # NEU, direkt nach der Frage
         "dauer_gesamt_s", "dauer_modell_s", "tokens_prompt", "tokens_antwort", "kosten_chf",
         "maengel_anzahl", "maengel",
     ]
@@ -139,6 +150,9 @@ def schreibe_csv(rohdaten: list[dict], bewertungen: list[dict], modell: str) -> 
                 "id": roh["fall"]["id"],
                 "kategorie": roh["fall"]["kategorie"],
                 "frage": roh["fall"]["frage"],
+                "runde": roh["runde"],
+                "gedeckt": roh["gedeckt"],
+                "beanstandungen": " | ".join(roh["beanstandungen"]),
                 "dauer_gesamt_s": roh["dauer_gesamt_s"],
                 "dauer_modell_s": roh["dauer_modell_s"],
                 "tokens_prompt": roh["tokens_prompt"],
@@ -181,6 +195,10 @@ def zusammenfassung(rohdaten: list[dict], bewertungen: list[dict]) -> None:
     print(f"Verbotsbegriffe        {ohne_verbotene}/{len(seiten)} sauber")
     print(f"Fehlende Eintraege     {fehlende_eintraege}")
     print(f"Strukturmaengel        {maengel} im ganzen Lauf")
+    zweite_runde = sum(1 for r in rohdaten if r["runde"] >= 2)
+    offen_geblieben = sum(1 for r in rohdaten if not r["gedeckt"])
+    print(f"Kritiker hat gegriffen  {zweite_runde}/{len(rohdaten)} Faelle mit zweitem Entwurf")
+    print(f"Am Ende nicht gedeckt   {offen_geblieben}/{len(rohdaten)}")
     print(f"Dauer p50 / p95        {perzentil(dauern, 50)} s / {perzentil(dauern, 95)} s")
     print(f"Tokens ein / aus       {sum(r['tokens_prompt'] for r in rohdaten)}"
           f" / {sum(r['tokens_antwort'] for r in rohdaten)}")

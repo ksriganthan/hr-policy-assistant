@@ -6,6 +6,16 @@
 #         mit m['nummer'] aus Chroma matcht nie.
 # ziffer: null bedeutet, dass dieses Haus nichts dazu regelt. Solche Seiten
 #         zählen bei der Retrieval-Trefferquote nicht mit.
+#
+# Pipe:   15.09.2026. Ein "|" in einem Begriff trennt gleichwertige Schreibweisen,
+#         "zwei Arbeitstage|2 Arbeitstage" gilt als erfüllt, sobald eine der beiden
+#         Formen im Text steht. Die Liste bleibt ein UND, der Pipe ist das ODER.
+#         Grund: der Kritik-Knoten aus Woche 4 lässt das Modell näher an der
+#         Belegstelle abschreiben, und dort stehen Zahlen als Ziffern. Die
+#         Pflichtbegriffe massen damit die Schreibweise statt der Aussage.
+#         Bei den darf_nicht-Begriffen ist es die gefährlichere Richtung: ein
+#         Verbot, das nur die Ziffer kennt, findet die ausgeschriebene
+#         Halluzination nicht.
 
 - id: 1
   frage: Gilt der GAV für Chefärzte?
@@ -19,20 +29,20 @@
 - id: 2
   frage: Was bekomme ich nach 20 Dienstjahren?
   kategorie: tabelle
-  usb:  {ziffer: "2.5.9",  beantwortet: true, muss: ["10", Monatslohn], darf_nicht: ["3'000", CHF]}
-  ksbl: {ziffer: "12.15", beantwortet: true, muss: ["3'000"], darf_nicht: [Monatslohn]}
+  usb:  {ziffer: "2.5.9",  beantwortet: true, muss: ["10|zehn", Monatslohn], darf_nicht: ["3'000|3000", CHF]}
+  ksbl: {ziffer: "12.15", beantwortet: true, muss: ["3'000|3000"], darf_nicht: [Monatslohn]}
 
 - id: 3
   frage: Wie ist der Vaterschaftsurlaub geregelt?
   kategorie: nachbarthema
-  usb:  {ziffer: "2.5.6",  beantwortet: true, muss: [10 Tage], darf_nicht: []}
-  ksbl: {ziffer: "11.13", beantwortet: true, muss: ["10"], darf_nicht: [Elternurlaub, zwölf Monaten]}
+  usb:  {ziffer: "2.5.6",  beantwortet: true, muss: ["10 Tage|zehn Tage"], darf_nicht: []}
+  ksbl: {ziffer: "11.13", beantwortet: true, muss: ["10|zehn"], darf_nicht: [Elternurlaub, "zwölf Monaten|12 Monaten"]}
 
 - id: 4
   frage: Wie lange ist die Kündigungsfrist während der Probezeit?
   kategorie: nachbarthema
-  usb:  {ziffer: "2.2",  beantwortet: true, muss: [7 Tage, Kalenderwoche], darf_nicht: [3 Monate, 1 Monat]}
-  ksbl: {ziffer: "10.3", beantwortet: true, muss: [sieben Kalendertagen], darf_nicht: [drei Monaten]}
+  usb:  {ziffer: "2.2",  beantwortet: true, muss: ["7 Tage|sieben Tage", Kalenderwoche], darf_nicht: ["3 Monate|drei Monate", "1 Monat|einen Monat|einem Monat"]}
+  ksbl: {ziffer: "10.3", beantwortet: true, muss: ["sieben Kalendertagen|7 Kalendertagen"], darf_nicht: ["drei Monaten|3 Monaten"]}
 
 - id: 5
   frage: Gilt der GAV für Praktikanten?
@@ -43,21 +53,21 @@
 - id: 6
   frage: Wie lange dauert die Probezeit?
   kategorie: beide
-  usb:  {ziffer: "2.2",  beantwortet: true, muss: [3 Monate], darf_nicht: [7 Tage]}
-  ksbl: {ziffer: "10.3", beantwortet: true, muss: [drei Monate], darf_nicht: [sieben]}
+  usb:  {ziffer: "2.2",  beantwortet: true, muss: ["3 Monate|drei Monate"], darf_nicht: ["7 Tage|sieben Tage"]}
+  ksbl: {ziffer: "10.3", beantwortet: true, muss: ["drei Monate|3 Monate"], darf_nicht: ["sieben|7 Kalendertag|7 Tag"]}
 
 - id: 7
   frage: Wie lange ist die Kündigungsfrist nach der Probezeit?
   kategorie: beide
   # 13.09.2026: muss korrigiert. Das Modell schreibt Zahlen aus ("einen Monat"), die
   # Pflichtbegriffe standen als Ziffern da und massen damit Schreibweise statt Inhalt.
-  usb:  {ziffer: "2.3.3", beantwortet: true, muss: [Monat, Monate, Anstellungsjahr], darf_nicht: [7 Tage]}
-  ksbl: {ziffer: "10.6",  beantwortet: true, muss: [drei Monaten, Monatsende], darf_nicht: [1 Monat, erstes Jahr]}
+  usb:  {ziffer: "2.3.3", beantwortet: true, muss: [Monat, Monate, Anstellungsjahr], darf_nicht: ["7 Tage|sieben Tage"]}
+  ksbl: {ziffer: "10.6",  beantwortet: true, muss: ["drei Monaten|3 Monaten", Monatsende], darf_nicht: ["1 Monat|einen Monat|einem Monat", erstes Jahr]}   # 15.09.: "ein Monat" bewusst weggelassen, es traf in "auf ein Monatsende"
 
 - id: 8
   frage: Wie viele Ferientage habe ich pro Jahr?
   kategorie: beide
-  usb:  {ziffer: "2.5.1.1", beantwortet: true, muss: ["25", "50."], darf_nicht: [30 Arbeitstage]}
+  usb:  {ziffer: "2.5.1.1", beantwortet: true, muss: ["25", "50."], darf_nicht: ["30 Arbeitstage|dreissig Arbeitstage"]}
   ksbl: {ziffer: "11.7",    beantwortet: true, muss: ["25", "30"], darf_nicht: ["32"]}
 
 - id: 9
@@ -75,8 +85,8 @@
 - id: 11
   frage: Wie hoch ist die Abfindung bei einer Kündigung?
   kategorie: beide
-  usb:  {ziffer: "2.3.10", beantwortet: true, muss: [Lebensalter, Anstellungsdauer], darf_nicht: [zwölf Monatslöhne, 12 Monatslöhne]}
-  ksbl: {ziffer: "10.10",  beantwortet: true, muss: [zwölf Monatslöhne, maximal], darf_nicht: []}
+  usb:  {ziffer: "2.3.10", beantwortet: true, muss: [Lebensalter, Anstellungsdauer], darf_nicht: ["zwölf Monatslöhne|12 Monatslöhne"]}
+  ksbl: {ziffer: "10.10",  beantwortet: true, muss: ["zwölf Monatslöhne|12 Monatslöhne", maximal], darf_nicht: []}
 
 - id: 12
   frage: Darf ich eine Nebenbeschäftigung ausüben?
@@ -105,7 +115,7 @@
 - id: 16
   frage: Bekomme ich eine Treueprämie?
   kategorie: nur_eines
-  usb:  {ziffer: null,    beantwortet: false, muss: [], darf_nicht: ["1'500", "3'000", "5'000"]}
+  usb:  {ziffer: null,    beantwortet: false, muss: [], darf_nicht: ["1'500|1500", "3'000|3000", "5'000|5000"]}
   ksbl: {ziffer: "12.15", beantwortet: true,  muss: [Dienstjahren, CHF], darf_nicht: []}
 
 - id: 17
@@ -117,8 +127,8 @@
 - id: 18
   frage: Wie viele freie Tage bekomme ich bei meiner Heirat?
   kategorie: tabelle
-  usb:  {ziffer: "2.5.3",  beantwortet: true, muss: [zwei, Arbeitstage], darf_nicht: [drei Arbeitstage]}   # 13.09.: Zahlen ausgeschrieben, siehe Fall 7
-  ksbl: {ziffer: "11.13", beantwortet: true, muss: [drei, Arbeitstage], darf_nicht: [zwei Arbeitstage]}
+  usb:  {ziffer: "2.5.3",  beantwortet: true, muss: ["zwei Arbeitstage|2 Arbeitstage"], darf_nicht: ["drei Arbeitstage|3 Arbeitstage"]}   # 13.09.: Zahlen ausgeschrieben, siehe Fall 7
+  ksbl: {ziffer: "11.13", beantwortet: true, muss: ["drei Arbeitstage|3 Arbeitstage"], darf_nicht: ["zwei Arbeitstage|2 Arbeitstage"]}
 
 - id: 19
   frage: Was ist das Bandminimum im Lohnband 5?
