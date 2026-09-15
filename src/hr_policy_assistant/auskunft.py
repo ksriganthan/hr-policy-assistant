@@ -74,6 +74,14 @@ def baue_prompt(frage: str, treffer) -> str:
     return f"Belegstellen:\n\n{chr(10).join(teile)}\n\nFrage: {frage}"
 
 
+def erzwinge_leere_belegstellen(auskunft: Auskunft) -> None:
+    """Das Modell haelt die Regel «bei frage_beantwortet false eine leere Liste» nicht
+    zuverlaessig ein. Statt einer weiteren Prompt-Runde wird sie hier erzwungen."""
+    for s in auskunft.spitaeler:          # ein Eintrag je Haus, USB und KSBL
+        if not s.frage_beantwortet:       # sagt das Haus «dazu steht nichts»
+            s.belegstellen = []           # dann gibt es auch nichts zu belegen
+
+
 def antworte(frage: str, spital: str | None = None):
     """Gibt die geprüfte Auskunft, die Modell-Metadaten und die verwendeten Treffer zurueck."""
     treffer = suche(frage, spital)
@@ -82,12 +90,8 @@ def antworte(frage: str, spital: str | None = None):
         nutzer=baue_prompt(frage, treffer),
         schema=Auskunft.model_json_schema(),
     )
+
     auskunft = Auskunft.model_validate_json(a.text)
-
-    # Das Modell haelt die Regel «bei frage_beantwortet false eine leere Liste» nicht
-    # zuverlaessig ein. Statt einer weiteren Prompt-Runde wird sie hier erzwungen.
-    for s in auskunft.spitaeler:  # ein Eintrag je Haus, USB und KSBL
-        if not s.frage_beantwortet:  # sagt das Haus «dazu steht nichts»
-            s.belegstellen = []  # dann gibt es auch nichts zu belegen
-
+    erzwinge_leere_belegstellen(auskunft)  # ersetzt die Schleife, die vorher hier stand
     return auskunft, a, treffer
+

@@ -34,3 +34,10 @@ class Ergebnis(BaseModel):
     modell: str               # welches Sprachmodell geantwortet hat
     dauer_s: float            # Dauer des Modellaufrufs
     kosten_chf: float         # aus dem Gateway, bei lokalen Modellen null
+
+class Kritik(BaseModel):
+    """Das Urteil des Kritik-Knotens über einen Entwurf."""
+
+    gedeckt: bool                    # True heisst, jede Aussage steht so in den Belegstellen
+    beanstandungen: list[str]        # die nicht gedeckten Saetze im Wortlaut, leere Liste wenn gedeckt True ist
+    begruendung: str                 # ein Satz zur Begruendung, nur fuer das Protokoll, der Ablauf liest ihn nicht
