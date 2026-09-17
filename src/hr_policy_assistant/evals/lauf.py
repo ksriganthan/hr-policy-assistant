@@ -86,12 +86,14 @@ def frage_stellen(fall: dict) -> dict | None:
             aufrufe = [aufruf]
             maengel = pruefe(auskunft, treffer)                   # im Graphen macht das der Knoten pruefen
             runde, gedeckt, beanstandungen = 1, None, []          # kein Kritiker, also kein Urteil
+            verlauf = []  # NEU: einstufig hat keinen Verlauf
         else:
             e = antworte_mit_kritik(fall["frage"])                # Endzustand des Graphen, ein dict
             auskunft, treffer, maengel = e["auskunft"], e["treffer"], e["maengel"]
             aufrufe = e["aufrufe"]                                # zwei bis vier Stueck, je nach Ruecksprung
             runde, gedeckt = e["runde"], e["kritik"].gedeckt
             beanstandungen = e["beanstandungen"]
+            verlauf = e["verlauf"]  # NEU: jede Runde, auch die ueberschriebenen Beanstandungen
     except Exception as fehler:
         print(f"  Fall {fall['id']} abgestuerzt: {type(fehler).__name__}: {fehler}")
         return None
@@ -111,6 +113,7 @@ def frage_stellen(fall: dict) -> dict | None:
         "runde": runde,                               # 1 heisst kein Ruecksprung, 2 heisst einer
         "gedeckt": gedeckt,                           # Urteil des Kritikers, None wenn einstufig
         "beanstandungen": beanstandungen,             # was am Ende offen blieb
+        "verlauf": verlauf,  # NEU: was in jeder Runde passiert ist
     }
 
 
@@ -152,7 +155,7 @@ def schreibe_csv(rohdaten: list[dict], bewertungen: list[dict], modell: str) -> 
 
     spalten = [
         "id", "kategorie", "frage",
-        "runde", "gedeckt", "beanstandungen",  # NEU, direkt nach der Frage
+        "runde", "gedeckt", "beanstandungen", "verlauf",   # verlauf NEU, direkt nach beanstandungen
         "dauer_gesamt_s", "dauer_modell_s", "tokens_prompt", "tokens_antwort", "kosten_chf",
         "maengel_anzahl", "maengel",
     ]
@@ -172,6 +175,7 @@ def schreibe_csv(rohdaten: list[dict], bewertungen: list[dict], modell: str) -> 
                 "runde": roh["runde"],
                 "gedeckt": roh["gedeckt"],
                 "beanstandungen": " | ".join(roh["beanstandungen"]),
+                "verlauf": " || ".join(roh["verlauf"]),  # NEU, doppelter Strich trennt die Runden
                 "dauer_gesamt_s": roh["dauer_gesamt_s"],
                 "dauer_modell_s": roh["dauer_modell_s"],
                 "tokens_prompt": roh["tokens_prompt"],

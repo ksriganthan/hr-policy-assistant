@@ -111,24 +111,43 @@ def entwerfen(z: Zustand) -> dict:
 
 
 def kritisieren(z: Zustand) -> dict:
-    """Zweiter Modellaufruf mit anderer Aufgabe. Liest dieselben Belegstellen und den Entwurf."""
-    entwurf = "\n".join(                                      # die Auskunft als Text, ein Haus pro Zeile
-        f"{s.spital}: {s.text} (genannte Belegstellen: {s.belegstellen})"
-        for s in z["auskunft"].spitaeler
-    )
-    nutzer = baue_prompt(z["frage"], z["treffer"]) + f"\n\nZu pruefende Auskunft:\n{entwurf}"
+    """Ein Kritik-Aufruf pro Haus. Kein Aufruf sieht den Text des anderen Hauses.
 
-    a = frage_modell(system=KRITIK_SYSTEM, nutzer=nutzer, schema=Kritik.model_json_schema())
-    kritik = Kritik.model_validate_json(a.text)
+    Geaendert am 18.09.2026. Vorher ein einziger Aufruf mit dem zusammengefuegten Entwurf
+    beider Haeuser. Die Ablation vom 17.09. hat gezeigt, dass der Kritiker dann eine
+    USB-Aussage gegen die Belegstellen beider Haeuser prueft, eine widersprechende Zahl
+    findet und den Widerspruch als fehlende Deckung liest. Ein Haus je Aufruf senkt die
+    Fehlalarme in der Messung von 3 bis 4 von 4 auf 1 von 4.
+    """
+    kritiken, aufrufe, zeilen = [], [], []                    # sammeln statt einmal zuweisen
+
+    for s in z["auskunft"].spitaeler:                         # NEU: Schleife, vorher ein Aufruf fuer beide
+        entwurf = f"{s.spital}: {s.text} (genannte Belegstellen: {s.belegstellen})"
+        nutzer = baue_prompt(z["frage"], z["treffer"]) + f"\n\nZu pruefende Auskunft:\n{entwurf}"
+
+        a = frage_modell(system=KRITIK_SYSTEM, nutzer=nutzer, schema=Kritik.model_json_schema())
+        k = Kritik.model_validate_json(a.text)
+
+        kritiken.append(k)                                    # ein Urteil je Haus
+        aufrufe.append(a)                                     # ein Aufruf je Haus, zaehlt bei Tokens und Kosten
+        zeilen.append(
+            f"Runde {z['runde']} Kritik {s.spital}: "         # Hausname NEU im Verlauf, sonst nicht zuordenbar
+            f"gedeckt={k.gedeckt}, beanstandet={k.beanstandungen}"
+        )
+
+    gesamt = Kritik(                                          # NEU: die Urteile zu einem zusammenfassen
+        gedeckt=all(k.gedeckt for k in kritiken),             # nur gedeckt, wenn JEDES Haus gedeckt ist
+        beanstandungen=[b for k in kritiken for b in k.beanstandungen],   # alle in eine flache Liste
+        begruendung=" | ".join(k.begruendung for k in kritiken),
+    )
 
     return {
-        "kritik": kritik,
-        "beanstandungen": kritik.beanstandungen,
-        "aufrufe": z["aufrufe"] + [a],  # ← hier, a ist der Kritik-Aufruf
-        "verlauf": z["verlauf"] + [
-            f"Runde {z['runde']} Kritik: gedeckt={kritik.gedeckt}, beanstandet={kritik.beanstandungen}"
-        ],
+        "kritik": gesamt,                                     # wie_weiter liest weiterhin kritik.gedeckt
+        "beanstandungen": gesamt.beanstandungen,              # entwerfen liest weiterhin diese Liste
+        "aufrufe": z["aufrufe"] + aufrufe,                    # jetzt zwei statt einer pro Runde
+        "verlauf": z["verlauf"] + zeilen,                     # jetzt zwei Zeilen statt einer
     }
+
 
 
 def pruefen(z: Zustand) -> dict:
