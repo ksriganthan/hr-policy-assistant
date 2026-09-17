@@ -14,6 +14,7 @@ venv/
 /antworte.py
 /logs/
 /kosten.py
+/teste_graph.py
 
 # Secrets
 .env
