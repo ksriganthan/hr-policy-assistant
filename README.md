@@ -309,12 +309,26 @@ zu erkennen braucht eine zweite Instanz, die jede Aussage gegen ihre Belegstelle
 Der zweite Weg zu einer Antwort, `workflow/graph.py`. Dieselben Schritte, aber als Zustandsautomat
 mit vier Knoten und einer bedingten Kante.
 
+```mermaid
+flowchart LR
+    F([Frage]) --> suchen
+    suchen["suchen<br/><small>Chroma, k = 4</small>"] --> entwerfen
+    entwerfen["entwerfen<br/><small>Modellaufruf, Pydantic-Schema</small>"] --> kritisieren
+    kritisieren["kritisieren<br/><small>zweiter Aufruf, andere Rolle</small>"]
+    kritisieren -->|"gedeckt = False<br/>und runde &lt; MAX_RUNDEN"| entwerfen
+    kritisieren -->|"gedeckt = True<br/>oder Budget aufgebraucht"| pruefen
+    pruefen["pruefen<br/><small>vier deterministische Regeln</small>"] --> E([Auskunft und Maengel])
 ```
-suchen ──► entwerfen ──► kritisieren ──► pruefen
-              ▲                │
-              └────────────────┘
-               nur bei Beanstandung und freiem Budget
-```
+
+Die Bedingungen an den beiden Kanten aus `kritisieren` sind `wie_weiter()` im Bild. Der Kritiker
+hat kein Vetorecht, deshalb fuehrt die obere Kante auch dann nach `pruefen`, wenn Beanstandungen
+offen sind und das Budget aufgebraucht ist.
+
+Das Bild ist von Hand gepflegt. Zur Kontrolle gibt `uv run python zeige_ablauf.py --bild` den
+Graphen als Mermaid aus, erzeugt aus dem kompilierten Objekt. Es ersetzt das Bild hier nicht,
+weil es die Bedingungen an den Kanten nicht mitliefert, es beantwortet nur die Frage, ob Knoten
+und Kanten noch stimmen. Ohne `--bild` zeigt dasselbe Skript einen Lauf Schritt fuer Schritt, je
+Knoten mit den Feldern, die er geaendert hat.
 
 `suchen` holt die vier Treffer. `entwerfen` erzeugt die `Auskunft` wie `antworte()`, hängt aber
 die Beanstandungen der Vorrunde als Zusatzauftrag an den Prompt. `kritisieren` legt den Entwurf
