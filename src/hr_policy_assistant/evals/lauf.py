@@ -6,6 +6,7 @@ wuerde den Runner messen und nicht das System.
 
 import csv
 import math
+import os
 import time
 import unicodedata
 from datetime import datetime
@@ -16,11 +17,16 @@ import yaml
 from hr_policy_assistant.auskunft import antworte
 from hr_policy_assistant.config import PROJEKT_WURZEL
 from hr_policy_assistant.pruefung import pruefe
-from hr_policy_assistant.workflow.graph import antworte_mit_kritik    # statt: from ...auskunft import antworte
+from hr_policy_assistant.workflow.graph import antworte_mit_kritik
 
 FAELLE = PROJEKT_WURZEL / "evals" / "faelle.yaml"
 ERGEBNISSE = PROJEKT_WURZEL / "evals" / "ergebnisse"
 HAEUSER = ("USB", "KSBL")
+
+# Welcher Weg gemessen wird. "graph" ist der Standard und bleibt das Verhalten von vorher.
+# "einstufig" ruft antworte() wie die API und laesst den Kritiker weg. Gesetzt ueber
+# HRPA_WEG=einstufig, gleiches Muster wie HRPA_TREFFER beim k-Test vom 14.09.
+WEG = os.environ.get("HRPA_WEG", "graph")
 
 
 # ── Hilfsfunktionen ──────────────────────────────────────────
@@ -68,31 +74,43 @@ def perzentil(werte: list[float], p: float) -> float:
 # ── Messen ───────────────────────────────────────────────────
 
 def frage_stellen(fall: dict) -> dict | None:
-    """Stellt eine Frage ueber den Graphen und gibt die Rohdaten zurueck. None bei Absturz."""
+    """Stellt eine Frage und gibt die Rohdaten zurueck. None bei Absturz.
+
+    WEG entscheidet, welcher Weg gemessen wird. "graph" nimmt antworte_mit_kritik()
+    mit Kritiker und Ruecksprung, "einstufig" nimmt antworte() wie die API.
+    """
     start = time.perf_counter()
     try:
-        e = antworte_mit_kritik(fall["frage"])        # Endzustand des Graphen, ein dict
+        if WEG == "einstufig":
+            auskunft, aufruf, treffer = antworte(fall["frage"])   # ein einziger Modellaufruf
+            aufrufe = [aufruf]
+            maengel = pruefe(auskunft, treffer)                   # im Graphen macht das der Knoten pruefen
+            runde, gedeckt, beanstandungen = 1, None, []          # kein Kritiker, also kein Urteil
+        else:
+            e = antworte_mit_kritik(fall["frage"])                # Endzustand des Graphen, ein dict
+            auskunft, treffer, maengel = e["auskunft"], e["treffer"], e["maengel"]
+            aufrufe = e["aufrufe"]                                # zwei bis vier Stueck, je nach Ruecksprung
+            runde, gedeckt = e["runde"], e["kritik"].gedeckt
+            beanstandungen = e["beanstandungen"]
     except Exception as fehler:
         print(f"  Fall {fall['id']} abgestuerzt: {type(fehler).__name__}: {fehler}")
         return None
     dauer_gesamt = time.perf_counter() - start
 
-    aufrufe = e["aufrufe"]                            # zwei bis vier Stueck, je nach Ruecksprung
-
     return {
         "fall": fall,
-        "auskunft": e["auskunft"],
-        "treffer": e["treffer"],
-        "maengel": e["maengel"],                      # pruefe() lief schon im Graphen
+        "auskunft": auskunft,
+        "treffer": treffer,
+        "maengel": maengel,
         "modell": aufrufe[0].modell,
         "dauer_modell_s": round(sum(a.dauer_s for a in aufrufe), 2),
         "dauer_gesamt_s": round(dauer_gesamt, 2),
         "tokens_prompt": sum(a.tokens_prompt for a in aufrufe),
         "tokens_antwort": sum(a.tokens_antwort for a in aufrufe),
         "kosten_chf": sum(a.kosten_chf for a in aufrufe),
-        "runde": e["runde"],                          # NEU: 1 heisst kein Ruecksprung, 2 heisst einer
-        "gedeckt": e["kritik"].gedeckt,               # NEU: Urteil des Kritikers am Ende
-        "beanstandungen": e["beanstandungen"],        # NEU: was am Ende offen blieb
+        "runde": runde,                               # 1 heisst kein Ruecksprung, 2 heisst einer
+        "gedeckt": gedeckt,                           # Urteil des Kritikers, None wenn einstufig
+        "beanstandungen": beanstandungen,             # was am Ende offen blieb
     }
 
 
@@ -129,7 +147,8 @@ def schreibe_csv(rohdaten: list[dict], bewertungen: list[dict], modell: str) -> 
     """Eine Zeile pro Fall, Spalten fuer beide Haeuser."""
     ERGEBNISSE.mkdir(parents=True, exist_ok=True)
     stempel = datetime.now().strftime("%Y-%m-%d_%H%M")
-    pfad = ERGEBNISSE / f"{stempel}_{modell.replace(':', '-')}.csv"   # Doppelpunkt geht in Windows-Dateinamen nicht
+    weg = "" if WEG == "graph" else f"_{WEG}"                         # Graph-Dateien behalten den alten Namen
+    pfad = ERGEBNISSE / f"{stempel}_{modell.replace(':', '-')}{weg}.csv"   # Doppelpunkt geht in Windows-Dateinamen nicht
 
     spalten = [
         "id", "kategorie", "frage",
@@ -195,10 +214,11 @@ def zusammenfassung(rohdaten: list[dict], bewertungen: list[dict]) -> None:
     print(f"Verbotsbegriffe        {ohne_verbotene}/{len(seiten)} sauber")
     print(f"Fehlende Eintraege     {fehlende_eintraege}")
     print(f"Strukturmaengel        {maengel} im ganzen Lauf")
-    zweite_runde = sum(1 for r in rohdaten if r["runde"] >= 2)
-    offen_geblieben = sum(1 for r in rohdaten if not r["gedeckt"])
-    print(f"Kritiker hat gegriffen  {zweite_runde}/{len(rohdaten)} Faelle mit zweitem Entwurf")
-    print(f"Am Ende nicht gedeckt   {offen_geblieben}/{len(rohdaten)}")
+    if WEG == "graph":                                 # einstufig gibt es keinen Kritiker zu zaehlen
+        zweite_runde = sum(1 for r in rohdaten if r["runde"] >= 2)
+        offen_geblieben = sum(1 for r in rohdaten if not r["gedeckt"])
+        print(f"Kritiker hat gegriffen  {zweite_runde}/{len(rohdaten)} Faelle mit zweitem Entwurf")
+        print(f"Am Ende nicht gedeckt   {offen_geblieben}/{len(rohdaten)}")
     print(f"Dauer p50 / p95        {perzentil(dauern, 50)} s / {perzentil(dauern, 95)} s")
     print(f"Tokens ein / aus       {sum(r['tokens_prompt'] for r in rohdaten)}"
           f" / {sum(r['tokens_antwort'] for r in rohdaten)}")
@@ -208,7 +228,7 @@ def zusammenfassung(rohdaten: list[dict], bewertungen: list[dict]) -> None:
 
 def main() -> None:
     faelle = lade_faelle()
-    print(f"{len(faelle)} Faelle geladen")
+    print(f"{len(faelle)} Faelle geladen, Weg: {WEG}")
 
     rohdaten = []
     for i, fall in enumerate(faelle, start=1):
