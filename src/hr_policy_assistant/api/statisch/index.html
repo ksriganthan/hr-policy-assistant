@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAV-Auskunft</title>
+<style>
+  :root {
+    --grund: #ffffff; --text: #1a1a1a; --leise: #5c5c5c; --linie: #d8d8d8;
+    --feld: #f7f7f7; --akzent: #1c4f8b; --warn-grund: #fff4e5; --warn-linie: #d98c00;
+    --leer-grund: #f2f2f2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --grund: #16181c; --text: #e8e8e8; --leise: #a0a0a0; --linie: #34383f;
+      --feld: #1e2127; --akzent: #7aa8dd; --warn-grund: #2e2515; --warn-linie: #d98c00;
+      --leer-grund: #1b1d22;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--grund); color: var(--text);
+    max-width: 52rem; margin: 0 auto; padding: 2rem 1rem 4rem; line-height: 1.55;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  .unter { color: var(--leise); margin: 0 0 2rem; }
+  label { display: block; font-weight: 600; margin-bottom: .35rem; }
+  textarea, select {
+    width: 100%; font: inherit; padding: .6rem .7rem;
+    background: var(--grund); color: var(--text);
+    border: 1px solid var(--linie); border-radius: 6px;
+  }
+  textarea { resize: vertical; }
+  .reihe { display: flex; gap: 1rem; align-items: flex-end; margin-top: 1rem; flex-wrap: wrap; }
+  .reihe > div { flex: 0 0 10rem; }
+  button {
+    font: inherit; font-weight: 600; padding: .6rem 1.2rem; cursor: pointer;
+    background: var(--akzent); color: #fff; border: 0; border-radius: 6px;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  .beispiele { margin: 1rem 0 0; display: flex; gap: .5rem; flex-wrap: wrap; }
+  .beispiele button {
+    background: transparent; color: var(--akzent); border: 1px solid var(--linie);
+    font-weight: 400; padding: .3rem .6rem; font-size: .9rem;
+  }
+  #meldung { min-height: 1.5rem; margin: 1.25rem 0 0; color: var(--leise); }
+  #meldung.fehler { color: #c0392b; font-weight: 600; }
+  .karte { border: 1px solid var(--linie); border-radius: 8px; padding: 1rem 1.15rem; margin-top: 1.25rem; }
+  .karte.leer { background: var(--leer-grund); }
+  .karte h2 { font-size: 1.1rem; margin: 0 0 .2rem; display: flex; align-items: center; gap: .6rem; }
+  .marke {
+    font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: .15rem .45rem; border-radius: 4px; border: 1px solid var(--linie); color: var(--leise);
+  }
+  .karte p { margin: .5rem 0 0; }
+  .quellen { margin-top: .9rem; border-top: 1px solid var(--linie); padding-top: .7rem; }
+  .quellen > strong { font-size: .85rem; color: var(--leise); text-transform: uppercase; letter-spacing: .03em; }
+  details { margin-top: .5rem; }
+  summary { cursor: pointer; font-weight: 600; }
+  .zitat {
+    margin: .5rem 0 0; padding: .6rem .8rem; background: var(--feld);
+    border-left: 3px solid var(--akzent); border-radius: 0 4px 4px 0;
+    white-space: pre-wrap; font-size: .93rem;
+  }
+  .kopfzeile { font-size: .85rem; color: var(--leise); margin: 0 0 .25rem; }
+  .warn { background: var(--warn-grund); border: 1px solid var(--warn-linie); border-radius: 8px; padding: .9rem 1.15rem; margin-top: 1.25rem; }
+  .warn ul { margin: .4rem 0 0; padding-left: 1.2rem; }
+  .messung { margin-top: 1.5rem; font-size: .85rem; color: var(--leise); }
+  .messung dl { display: grid; grid-template-columns: auto 1fr; gap: .2rem 1rem; margin: .5rem 0 0; }
+  .messung dt { font-weight: 600; }
+  .messung dd { margin: 0; }
+  .hinweis { margin-top: 1.25rem; font-size: .93rem; color: var(--leise); }
+</style>
+</head>
+<body>
+  <h1>GAV-Auskunft</h1>
+  <p class="unter">Universitätsspital Basel und Kantonsspital Baselland im Vergleich.
+     Jede Aussage beruht auf Belegstellen, die unten mitgeliefert werden.</p>
+
+  <label for="frage">Ihre Frage</label>
+  <textarea id="frage" rows="3" maxlength="500"
+            placeholder="Wie lange dauert der Vaterschaftsurlaub?"></textarea>
+
+  <div class="reihe">
+    <div>
+      <label for="spital">Haus</label>
+      <select id="spital">
+        <option value="">beide vergleichen</option>
+        <option value="USB">nur USB</option>
+        <option value="KSBL">nur KSBL</option>
+      </select>
+    </div>
+    <button id="senden">Frage stellen</button>
+  </div>
+
+  <div class="beispiele" id="beispiele"></div>
+
+  <p id="meldung" role="status" aria-live="polite"></p>
+  <div id="ergebnis"></div>
+
+<script>
+const BEISPIELE = [
+  "Wie lange dauert der Vaterschaftsurlaub?",
+  "Wie viele Ferientage stehen mir mit 45 Jahren zu?",
+  "Beteiligt sich das Spital an einer Weiterbildung?",
+];
+const ZEITGRENZE_MS = 120000;          // lokale Modelle brauchen lange, aber nicht unbegrenzt
+
+const knopf = document.getElementById("senden");
+const feldFrage = document.getElementById("frage");
+const feldSpital = document.getElementById("spital");
+const meldung = document.getElementById("meldung");
+const ergebnis = document.getElementById("ergebnis");
+
+/* Baut ein Element. textContent statt innerHTML, siehe Erklaerung im Chat. */
+function el(tag, klasse, text) {
+  const n = document.createElement(tag);
+  if (klasse) n.className = klasse;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+BEISPIELE.forEach((b) => {                       // Beispielfragen als Knoepfe, damit niemand leer startet
+  const k = el("button", null, b);
+  k.addEventListener("click", () => { feldFrage.value = b; feldFrage.focus(); });
+  document.getElementById("beispiele").appendChild(k);
+});
+
+feldFrage.addEventListener("keydown", (e) => {   // Ctrl+Enter sendet, Enter bleibt Zeilenumbruch
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) knopf.click();
+});
+
+/* Eine Belegstelle als aufklappbarer Block. */
+function belegstelleBlock(b) {
+  const d = el("details");
+  const s = el("summary", null, `[${b.nummer}] ${b.dokument} Ziff. ${b.ziffer} ${b.titel}`);
+  d.appendChild(s);
+  const teile = [];
+  if (b.seite !== null && b.seite !== undefined) teile.push("Seite " + b.seite);
+  if (b.stand) teile.push("Stand " + b.stand);
+  if (b.distanz !== null && b.distanz !== undefined) teile.push("Distanz " + b.distanz.toFixed(3));
+  if (teile.length) d.appendChild(el("p", "kopfzeile", teile.join(" · ")));
+  d.appendChild(el("p", "zitat", b.text));       // der Chunk-Text, genau wie das Modell ihn gelesen hat
+  return d;
+}
+
+/* Eine Haus-Karte. */
+function spitalKarte(s, alleBelege) {
+  const karte = el("div", s.frage_beantwortet ? "karte" : "karte leer");
+
+  const h = el("h2", null, s.spital === "USB" ? "Universitätsspital Basel" : "Kantonsspital Baselland");
+  h.appendChild(el("span", "marke", s.frage_beantwortet ? "geregelt" : "keine Regelung gefunden"));
+  karte.appendChild(h);
+  karte.appendChild(el("p", null, s.text));
+
+  if (s.belegstellen.length) {
+    const q = el("div", "quellen");
+    q.appendChild(el("strong", null, "Belegstellen"));
+    s.belegstellen.forEach((nr) => {
+      const b = alleBelege.find((x) => x.nummer === nr);        // Nummer aufloesen, sonst steht nur eine Zahl da
+      if (b) q.appendChild(belegstelleBlock(b));
+      else q.appendChild(el("p", "kopfzeile", `[${nr}] nicht in der Trefferliste`));
+    });
+    karte.appendChild(q);
+  }
+  return karte;
+}
+
+/* Die ganze Antwort aufbauen. */
+function zeige(daten) {
+  ergebnis.replaceChildren();                    // alte Antwort restlos weg, kein Rest von vorher
+
+  daten.auskunft.spitaeler.forEach((s) => ergebnis.appendChild(spitalKarte(s, daten.belegstellen)));
+
+  if (daten.auskunft.hinweis) {
+    ergebnis.appendChild(el("p", "hinweis", "Hinweis: " + daten.auskunft.hinweis));
+  }
+
+  if (daten.maengel.length) {                    // nur bei Befund sichtbar, dann aber sofort und ungeklappt
+    const w = el("div", "warn");
+    w.appendChild(el("strong", null, "Die automatische Prüfung hat Mängel gefunden"));
+    const ul = el("ul");
+    daten.maengel.forEach((m) => ul.appendChild(el("li", null, m)));
+    w.appendChild(ul);
+    ergebnis.appendChild(w);
+  }
+
+  const m = el("div", "messung");                // Messwerte und alle Treffer, zugeklappt
+  const d = el("details");
+  d.appendChild(el("summary", null, daten.maengel.length
+    ? "Prüfung und Messung"
+    : "Prüfung ohne Befund, Messung anzeigen"));
+  const dl = el("dl");
+  [["Modell", daten.modell],
+   ["Dauer", daten.dauer_s.toFixed(1) + " s"],
+   ["Kosten", daten.kosten_chf.toFixed(4) + " CHF"],
+   ["Belegstellen gesucht", daten.belegstellen.length]].forEach(([k, v]) => {
+    dl.appendChild(el("dt", null, k));
+    dl.appendChild(el("dd", null, String(v)));
+  });
+  d.appendChild(dl);
+  d.appendChild(el("strong", null, "Alle Treffer aus dem Vektorstore"));
+  daten.belegstellen.forEach((b) => d.appendChild(belegstelleBlock(b)));
+  m.appendChild(d);
+  ergebnis.appendChild(m);
+}
+
+knopf.addEventListener("click", async () => {
+  const frage = feldFrage.value.trim();
+  const spital = feldSpital.value;
+
+  ergebnis.replaceChildren();
+  meldung.className = "";
+  meldung.textContent = "Das Modell antwortet lokal, das dauert einige Sekunden.";
+  knopf.disabled = true;
+
+  try {
+    const antwort = await fetch("/frage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frage: frage, spital: spital === "" ? null : spital }),
+      signal: AbortSignal.timeout(ZEITGRENZE_MS),   // bricht ab, statt unbegrenzt zu warten
+    });
+    const daten = await antwort.json();
+
+    if (!antwort.ok) {                              // 422 und 500 sind fuer fetch erfolgreiche Antworten
+      meldung.className = "fehler";
+      const erste = Array.isArray(daten.detail) ? daten.detail[0] : null;
+      meldung.textContent = erste
+        ? `Eingabe abgelehnt. ${erste.loc?.join(".")}: ${erste.msg}`   // so sieht ein Pydantic-Fehler aus
+        : `Fehler ${antwort.status}. ${daten.detail ?? ""}`;
+      return;
+    }
+
+    meldung.textContent = "";
+    zeige(daten);
+  } catch (e) {
+    meldung.className = "fehler";
+    meldung.textContent = e.name === "TimeoutError"
+      ? `Keine Antwort innerhalb von ${ZEITGRENZE_MS / 1000} Sekunden. Läuft Ollama?`
+      : "Server nicht erreichbar. " + e.message;
+  } finally {
+    knopf.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
