@@ -17,7 +17,7 @@ from hr_policy_assistant.config import (
     PROJEKT_WURZEL,  # dieselbe Wurzel wie Ingestion und API, nur noch in config.py definiert
 )
 
-MODELL = os.environ.get("HRPA_MODELL", "gemma3:12b")   # HRPA_MODELL=qwen2.5:14b schaltet um, ohne Variable bleibt alles wie bisher
+MODELL = os.environ.get("HRPA_MODELL", "gemma3:12b")   # HRPA_MODELL=qwen2.5:14b schaltet um
 EMBEDDING_MODELL = "bge-m3"
 VERSUCHE = 3
 WARTEN_S = 1.0
