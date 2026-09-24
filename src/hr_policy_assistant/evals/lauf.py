@@ -17,6 +17,7 @@ import yaml
 from hr_policy_assistant.auskunft import antworte
 from hr_policy_assistant.config import PROJEKT_WURZEL
 from hr_policy_assistant.pruefung import pruefe
+from hr_policy_assistant.workflow.agent import antworte_mit_agent
 from hr_policy_assistant.workflow.graph import antworte_mit_kritik
 
 FAELLE = PROJEKT_WURZEL / "evals" / "faelle.yaml"
@@ -26,7 +27,7 @@ HAEUSER = ("USB", "KSBL")
 # Welcher Weg gemessen wird. "graph" ist der Standard und bleibt das Verhalten von vorher.
 # "einstufig" ruft antworte() wie die API und laesst den Kritiker weg. Gesetzt ueber
 # HRPA_WEG=einstufig, gleiches Muster wie HRPA_TREFFER beim k-Test vom 14.09.
-WEG = os.environ.get("HRPA_WEG", "graph")
+WEG = os.environ.get("HRPA_WEG", "graph")   # "graph", "einstufig" oder "agent"
 
 
 # ── Hilfsfunktionen ──────────────────────────────────────────
@@ -87,6 +88,17 @@ def frage_stellen(fall: dict) -> dict | None:
             maengel = pruefe(auskunft, treffer)                   # im Graphen macht das der Knoten pruefen
             runde, gedeckt, beanstandungen = 1, None, []          # kein Kritiker, also kein Urteil
             verlauf = []  # NEU: einstufig hat keinen Verlauf
+        elif WEG == "agent":
+            e = antworte_mit_agent(fall["frage"])                # Agent-Loop, gleiche Felder wie der Graph
+            if e["auskunft"] is None:                            # abgebrochen, bevor ein Entwurf entstand
+                print(f"  Fall {fall['id']} ohne Entwurf abgebrochen: {e['abbruchgrund']}")
+                return None
+            auskunft, treffer, maengel = e["auskunft"], e["treffer"], e["maengel"]
+            aufrufe = e["aufrufe"]
+            runde = e["runde"]
+            gedeckt = e["kritik"].gedeckt if e["kritik"] else None   # None, wenn nie geprueft wurde
+            beanstandungen = e["beanstandungen"]
+            verlauf = e["verlauf"] + [f"status={e['status']} {e['abbruchgrund']}".strip()]
         else:
             e = antworte_mit_kritik(fall["frage"])                # Endzustand des Graphen, ein dict
             auskunft, treffer, maengel = e["auskunft"], e["treffer"], e["maengel"]

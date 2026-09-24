@@ -6,7 +6,7 @@ Die Endpunkte selbst liegen unter api/routen/, nach Zweck getrennt.
 
 from fastapi import FastAPI
 
-from hr_policy_assistant.api.routen import frage, gesund
+from hr_policy_assistant.api.routen import frage, gesund, oberflaeche
 
 app = FastAPI(              # das Anwendungsobjekt, uvicorn sucht genau diese Variable - Server als Objekt
     title="hr-policy-assistant",                 # Titel und Beschreibung landen in /docs und in openapi.json
@@ -16,3 +16,5 @@ app = FastAPI(              # das Anwendungsobjekt, uvicorn sucht genau diese Va
 
 app.include_router(frage.router)                 # ab hier kennt die App POST /frage
 app.include_router(gesund.router)                # und GET /gesund
+
+app.include_router(oberflaeche.router)           # und GET / mit der Bedienseite

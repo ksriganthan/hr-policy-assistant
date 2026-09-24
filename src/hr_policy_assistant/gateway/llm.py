@@ -4,6 +4,7 @@ Jeder Aufruf wird bei Verbindungsfehlern wiederholt, jeder Chat-Aufruf protokoll
 """
 
 import json
+import os
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -16,7 +17,7 @@ from hr_policy_assistant.config import (
     PROJEKT_WURZEL,  # dieselbe Wurzel wie Ingestion und API, nur noch in config.py definiert
 )
 
-MODELL = "gemma3:12b"
+MODELL = os.environ.get("HRPA_MODELL", "gemma3:12b")   # HRPA_MODELL=qwen2.5:14b schaltet um, ohne Variable bleibt alles wie bisher
 EMBEDDING_MODELL = "bge-m3"
 VERSUCHE = 3
 WARTEN_S = 1.0
@@ -44,6 +45,7 @@ class Antwort:
     dauer_s: float
     versuch: int
     kosten_chf: float  # NEU
+    werkzeugrufe: tuple = ()   # NEU: leer bei normalen Aufrufen, gefuellt beim Agent-Loop
 
 
 def _mit_wiederholung(aufruf: Callable):
@@ -124,4 +126,49 @@ def frage_modell(
         ),
     )
     protokolliere(a, nutzer)
+    return a
+
+
+def frage_modell_verlauf(
+    verlauf: list[dict],
+    werkzeuge: list[dict],
+    modell: str = MODELL,
+    frage: str = "",
+) -> Antwort:
+    """Wie frage_modell, aber mit einem ganzen Gespraech und einer Werkzeugliste.
+
+    frage_modell schickt genau eine System- und eine Nutzernachricht. Ein Agent-Loop
+    braucht das wachsende Gespraech aller bisherigen Runden, deshalb diese zweite Tuer.
+    Wiederholung, Protokoll und Kostenrechnung sind dieselben.
+    """
+    start = time.perf_counter()
+    r, versuch = _mit_wiederholung(
+        lambda: ollama.chat(
+            model=modell,
+            messages=verlauf,            # die ganze Liste, nicht zwei feste Nachrichten
+            tools=werkzeuge,             # hier steht, welche Werkzeuge es gibt
+            options={"temperature": 0},
+        )
+    )
+
+    rufe = []
+    for w in (r["message"].get("tool_calls") or []):      # None, wenn das Modell frei antwortet
+        rufe.append({                                     # in einfache dicts umbauen, damit json sie schreiben kann
+            "name": w["function"]["name"],
+            "argumente": dict(w["function"]["arguments"]),
+        })
+
+    a = Antwort(
+        text=r["message"]["content"] or "",
+        modell=modell,
+        tokens_prompt=r.get("prompt_eval_count", 0),
+        tokens_antwort=r.get("eval_count", 0),
+        dauer_s=round(time.perf_counter() - start, 2),
+        versuch=versuch,
+        kosten_chf=berechne_kosten(
+            modell, r.get("prompt_eval_count", 0), r.get("eval_count", 0)
+        ),
+        werkzeugrufe=tuple(rufe),
+    )
+    protokolliere(a, f"Frage: {frage}")
     return a

@@ -1,0 +1,62 @@
+Start
+20 Faelle geladen, Weg: graph
+[1/20] Fall 1: Gilt der GAV für Chefärzte?
+  94.72 s, 0 Maengel
+[2/20] Fall 2: Was bekomme ich nach 20 Dienstjahren?
+  52.82 s, 0 Maengel
+[3/20] Fall 3: Wie ist der Vaterschaftsurlaub geregelt?
+  115.71 s, 0 Maengel
+[4/20] Fall 4: Wie lange ist die Kündigungsfrist während der Probezeit?
+  50.03 s, 0 Maengel
+[5/20] Fall 5: Gilt der GAV für Praktikanten?
+  51.74 s, 0 Maengel
+[6/20] Fall 6: Wie lange dauert die Probezeit?
+  37.56 s, 0 Maengel
+[7/20] Fall 7: Wie lange ist die Kündigungsfrist nach der Probezeit?
+  46.82 s, 0 Maengel
+[8/20] Fall 8: Wie viele Ferientage habe ich pro Jahr?
+  161.1 s, 0 Maengel
+[9/20] Fall 9: Habe ich Anspruch auf einen dreizehnten Monatslohn?
+  52.32 s, 0 Maengel
+[10/20] Fall 10: Wie lange wird der Lohn bei Krankheit weiterbezahlt?
+  129.97 s, 0 Maengel
+[11/20] Fall 11: Wie hoch ist die Abfindung bei einer Kündigung?
+  58.12 s, 0 Maengel
+[12/20] Fall 12: Darf ich eine Nebenbeschäftigung ausüben?
+  50.46 s, 0 Maengel
+[13/20] Fall 13: Zählt die Umkleidezeit als Arbeitszeit?
+  96.42 s, 0 Maengel
+[14/20] Fall 14: Habe ich Anspruch auf ein Arbeitszeugnis?
+  103.0 s, 0 Maengel
+[15/20] Fall 15: Darf ich das Geschäftsnotebook privat nutzen?
+  39.62 s, 0 Maengel
+[16/20] Fall 16: Bekomme ich eine Treueprämie?
+  98.95 s, 0 Maengel
+[17/20] Fall 17: Habe ich Anspruch auf Homeoffice?
+  38.49 s, 0 Maengel
+[18/20] Fall 18: Wie viele freie Tage bekomme ich bei meiner Heirat?
+  104.54 s, 0 Maengel
+[19/20] Fall 19: Was ist das Bandminimum im Lohnband 5?
+  106.44 s, 0 Maengel
+[20/20] Fall 20: Zahlt der Arbeitgeber einen Beitrag an die Verpflegung?
+  56.28 s, 0 Maengel
+
+20 von 20 Faellen durchgelaufen
+
+=======================================================
+Retrieval-Treffer      28/31   (9 Seiten ohne erwartete Ziffer)
+frage_beantwortet      38/40
+Pflichtbegriffe        31/40 vollstaendig
+Verbotsbegriffe        33/40 sauber
+Fehlende Eintraege     0
+Strukturmaengel        0 im ganzen Lauf
+Kritiker hat gegriffen  9/20 Faelle mit zweitem Entwurf
+Am Ende nicht gedeckt   7/20
+Dauer p50 / p95        56.28 s / 129.97 s
+Tokens ein / aus       157835 / 10024
+Kosten                 CHF 0.000000
+=======================================================
+
+CSV: D:\hr-policy-assistant\evals\ergebnisse\2026-09-22_0957_qwen2.5-14b.csv
+
+FERTIG

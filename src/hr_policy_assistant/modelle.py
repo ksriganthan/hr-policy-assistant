@@ -20,20 +20,41 @@ class Auskunft(BaseModel):
     spitaeler: list[SpitalAuskunft]  # zwei Eintraege, USB und KSBL
     hinweis: str | None = None       # verwandte Belegstelle, die die Frage nicht beantwortet, None wenn es keine gibt
 
+
+class Belegstelle(BaseModel):
+    """Ein Treffer aus dem Vektorstore, so wie das Modell ihn im Prompt gesehen hat.
+
+    Neu am 19.09.2026. Ohne diese Klasse gibt die Schnittstelle nur die Nummern heraus,
+    und keine Oberflaeche kann die Quelle zeigen, auf der eine Aussage beruht.
+    """
+
+    nummer: int                      # dieselbe Zahl wie [1] im Prompt, Zaehlung beginnt bei 1
+    dokument: str                    # USB oder KSBL
+    ziffer: str                      # Gliederungsziffer im GAV, etwa 11.15
+    titel: str                       # Titel des Abschnitts
+    text: str                        # der Chunk-Text, also was das Modell wirklich gelesen hat
+    seite: int | None = None         # optional, weil eine Metadate leer sein kann
+    stand: str | None = None
+    distanz: float | None = None     # Cosinus-Distanz, kleiner ist naeher. Nur zur Diagnose, kein Fachwert
+
+
 class FrageAnfrage(BaseModel):
     """Was von aussen an die Schnittstelle hereinkommt."""
 
     frage: str = Field(min_length=5, max_length=500)   # Field erlaubt Grenzen, ohne Standardwert ist das Feld Pflicht
     spital: Literal["USB", "KSBL"] | None = None       # optional, None heisst beide Spitaeler durchsuchen
 
+
 class Ergebnis(BaseModel):
     """Was die Schnittstelle zurueckgibt."""
 
-    auskunft: Auskunft        # die Antwort selbst, so wie das Modell sie geliefert hat
-    maengel: list[str]        # Ergebnis von pruefe(), leere Liste heisst sauber
-    modell: str               # welches Sprachmodell geantwortet hat
-    dauer_s: float            # Dauer des Modellaufrufs
-    kosten_chf: float         # aus dem Gateway, bei lokalen Modellen null
+    auskunft: Auskunft                 # die Antwort selbst, so wie das Modell sie geliefert hat
+    belegstellen: list[Belegstelle]    # NEU: die Treffer, auf die sich die Nummern in auskunft beziehen
+    maengel: list[str]                 # Ergebnis von pruefe(), leere Liste heisst sauber
+    modell: str                        # welches Sprachmodell geantwortet hat
+    dauer_s: float                     # Dauer des Modellaufrufs
+    kosten_chf: float                  # aus dem Gateway, bei lokalen Modellen null
+
 
 class Kritik(BaseModel):
     """Das Urteil des Kritik-Knotens über einen Entwurf."""

@@ -1,0 +1,25 @@
+Import ok, Lauf startet
+============================================================
+status abgebrochen MAX_RUNDEN 8 erreicht
+Runden 8
+Modellaufrufe 16
+Belegstellen 4
+Maengel []
+------------------------------------------------------------
+   Runde 1 suche: Ferientage 50 Jahre USB KSBL
+   Runde 2 Entwurf USB: Die Belegstellen des UniversitätsSpital Basel geben keine spezifische Antwort auf die Anzahl der Ferientage bei einem bestimmten Alter.
+   Runde 3 Kritik USB: gedeckt=True
+   Runde 3 Kritik KSBL: gedeckt=False
+   Runde 4 suche: Ferientage 50 Jahre spezifisch USB
+   Runde 5 suche: Anzahl Ferientage bei 50 Jahren USB
+   Runde 6 Kritik USB: gedeckt=False
+   Runde 6 Kritik KSBL: gedeckt=False
+   Runde 7 Entwurf USB: Mit 50 Jahren beträgt der Ferienanspruch laut Ziff. 11.7 c des KSBL-GAV 27 Arbeitstage pro Kalenderjahr.
+   Runde 8 Kritik KSBL: gedeckt=False
+   Runde 8 Kritik USB: gedeckt=True
+------------------------------------------------------------
+KSBL: beantwortet=True belege=[1]
+   Mit 50 Jahren beträgt der Ferienanspruch laut Ziff. 11.7 c des KSBL-GAV 27 Arbeitstage pro Kalenderjahr.
+USB: beantwortet=True belege=[2]
+   Mit 50 Jahren beträgt der Ferienanspruch laut Ziff. 2.5.1.1 des USB-GAV 28 Arbeitstage pro Kalenderjahr.
+FERTIG
