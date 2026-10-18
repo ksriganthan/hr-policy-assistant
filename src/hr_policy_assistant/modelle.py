@@ -43,17 +43,27 @@ class FrageAnfrage(BaseModel):
 
     frage: str = Field(min_length=5, max_length=500)   # Field erlaubt Grenzen, ohne Standardwert ist das Feld Pflicht
     spital: Literal["USB", "KSBL"] | None = None       # optional, None heisst beide Spitaeler durchsuchen
+    weg: Literal["einstufig", "workflow", "agent"] = "einstufig"  # NEU. Standard bleibt der schnelle Weg,
+    # damit bestehende Aufrufe sich nicht aendern
 
 
 class Ergebnis(BaseModel):
     """Was die Schnittstelle zurueckgibt."""
 
-    auskunft: Auskunft                 # die Antwort selbst, so wie das Modell sie geliefert hat
-    belegstellen: list[Belegstelle]    # NEU: die Treffer, auf die sich die Nummern in auskunft beziehen
+    auskunft: Auskunft | None = None   # None, wenn der Agent abbricht, bevor ein Entwurf steht
+    belegstellen: list[Belegstelle]    # die Treffer, auf die sich die Nummern in auskunft beziehen
     maengel: list[str]                 # Ergebnis von pruefe(), leere Liste heisst sauber
     modell: str                        # welches Sprachmodell geantwortet hat
-    dauer_s: float                     # Dauer des Modellaufrufs
-    kosten_chf: float                  # aus dem Gateway, bei lokalen Modellen null
+    weg: str                           # welcher der drei Wege gelaufen ist
+    aufrufe: int                       # wie viele Modellaufrufe, 1 beim einstufigen Weg
+    dauer_s: float                     # Summe ueber alle Aufrufe
+    kosten_chf: float                  # Summe, bei lokalen Modellen null
+    tokens_ein: int                    # Summe tokens_prompt, das ist die teure Seite
+    tokens_aus: int                    # Summe tokens_antwort
+    runden: int | None = None          # Graph 1 oder 2, Agent 1 bis 8, einstufig None
+    verlauf: list[str] = []            # was in jeder Runde passiert ist, fuer die UI sichtbar
+    status: str = "ok"                 # "ok" oder "abgebrochen", nur der Agent kann abbrechen
+    abbruchgrund: str | None = None
 
 
 class Kritik(BaseModel):
