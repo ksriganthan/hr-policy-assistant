@@ -17,7 +17,7 @@ from hr_policy_assistant.config import (
     PROJEKT_WURZEL,  # dieselbe Wurzel wie Ingestion und API, nur noch in config.py definiert
 )
 
-MODELL = os.environ.get("HRPA_MODELL", "gemma3:12b")   # HRPA_MODELL=qwen2.5:14b schaltet um
+MODELL = os.environ.get("HRPA_MODELL", "qwen2.5:14b")   # HRPA_MODELL=qwen2.5:14b schaltet um
 EMBEDDING_MODELL = "bge-m3"
 VERSUCHE = 3
 WARTEN_S = 1.0
@@ -32,7 +32,8 @@ VORUEBERGEHEND = (
 )
 
 PREISE_CHF_PRO_MIO = {                       # (Eingabe, Ausgabe) in CHF pro Million Tokens
-    "gemma3:12b": (0.0, 0.0),                # lokal, kostet Strom, keine Franken
+    "qwen2.5:14b": (0.0, 0.0),               # lokal, kostet Strom, keine Franken
+    "gemma3:12b": (0.0, 0.0),                # Baseline bis 22.09.2026, lokal
     "bge-m3": (0.0, 0.0),
 }
 
