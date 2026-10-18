@@ -16,6 +16,10 @@ venv/
 /kosten.py
 /teste_graph.py
 
+# Protokolle der Messlaeufe. Die Messskripte selbst bleiben im Repo,
+# ihre Ausgabe nicht.
+*.log
+
 # Secrets
 .env
 .env.local
