@@ -4,10 +4,10 @@ Aendert nichts im System. Importiert nur und ruft das Modell auf.
 Start aus der Projektwurzel:  uv run python kritik_ab.py
 """
 
-from hr_policy_assistant.auskunft import baue_prompt, suche      # dieselbe Suche wie im Graphen
-from hr_policy_assistant.gateway.llm import frage_modell         # derselbe Weg zum Modell
+from hr_policy_assistant.auskunft import baue_prompt, suche  # dieselbe Suche wie im Graphen
+from hr_policy_assistant.gateway.llm import frage_modell  # derselbe Weg zum Modell
 from hr_policy_assistant.modelle import Kritik
-from hr_policy_assistant.workflow.graph import KRITIK_SYSTEM     # Fassung A, unveraendert
+from hr_policy_assistant.workflow.graph import KRITIK_SYSTEM  # Fassung A, unveraendert
 
 # ── Die vier Saetze, alle am 17.09.2026 als Fehlalarm belegt ──────────────
 

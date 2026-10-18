@@ -8,8 +8,8 @@ RAG-System über öffentliche Schweizer Gesamtarbeitsverträge, das Fragen mit
 nachprüfbaren Quellenzitaten beantwortet. Der Korpus umfasst heute zwei GAV,
 weitere HR-Dokumente wie Personalreglemente sind vorgesehen.
 
-> **In Arbeit** – AI-Engineering-Sprint 24.08.–18.10.2026. Was heute läuft und
-> was fehlt, steht unter «Stand».
+> AI-Engineering-Sprint 24.08.–18.10.2026. Was läuft, was bewusst nicht gebaut
+> wurde und welche Grenzen gemessen sind, steht unter «Stand».
 
 ## Warum dieses Projekt
 
@@ -30,13 +30,14 @@ solche erkennbar ist.
 - Textbereinigung, Schnitt an Gliederungsziffern, Hierarchiepfad und Seitenzahl pro Abschnitt
 - Tabellen werden zeilenweise in Satzform gelesen, jeder Wert trägt seine Spaltenbezeichnung
 - Einbettung lokal über Ollama mit `bge-m3`
-- Chroma-Sammlung `hr_policy` mit Kosinus-Abstand, 211 Chunks. Das Embedding-Modell steht in
-  den Metadaten der Sammlung, die Abfrage prüft es beim Start
+- Chroma-Sammlung `hr_policy` mit Kosinus-Abstand, 211 Chunks. Das Embedding-Modell steht als
+  Metadatum an der Sammlung, damit beim Lesen nachvollziehbar ist, womit eingebettet wurde.
+  Eine Prüfung beim Öffnen gibt es heute nicht, sie wäre die natürliche Ergänzung
 - Metadaten an jedem Chunk, darunter Dokument, Ziffer, Seite, Titel, Pfad, Stand und Aktualitätsstatus
 - LLM-Gateway für alle Ollama-Aufrufe, Chat und Embedding. Jeder Aufruf wird als JSON-Zeile
   protokolliert, bei Verbindungsfehlern in insgesamt bis zu drei Versuchen mit wachsender Pause
   wiederholt und mit Tokenzahlen, Dauer und Kosten zurückgegeben
-- End-to-End-Antwort mit Belegnummern über ein lokales Sprachmodell (`gemma3:12b`)
+- End-to-End-Antwort mit Belegnummern über ein lokales Sprachmodell, Standard `qwen2.5:14b`
 - Strukturierte Ausgabe. Das Schema aus den Pydantic-Klassen geht als `format` an Ollama, die
   Rückgabe wird mit `model_validate_json` geprüft. Pro Haus ein Eintrag mit Aussage und
   Belegstellennummern
@@ -51,27 +52,68 @@ solche erkennbar ist.
 - Eval-Set mit 20 Fällen, zu jedem eine vor dem Lauf festgelegte Sollantwort je Haus.
   Der Runner misst Retrieval, `frage_beantwortet`, Pflicht- und Verbotsbegriffe, Strukturmängel,
   p50 und p95, Tokens und Kosten und schreibt eine CSV je Lauf
+- Zweiter Weg über LangGraph mit Kritik-Rolle, vier Knoten und einem bedingten Rücksprung.
+  Jeder Kritik-Aufruf sieht genau ein Haus und nur dessen Belegstellen
+- Dritter Weg als Agent-Loop. Dasselbe Ziel, aber das Modell wählt aus drei Werkzeugen selbst,
+  mit einer Notbremse bei acht Runden. Gebaut als Vergleich zum Graphen, nicht als Ersatz
+- Bedienoberfläche unter `GET /`, ausgeliefert von derselben Anwendung. Die drei Wege sind
+  darin wählbar, und der Verlauf eines Laufs ist sichtbar
+- Docker-Image mit Anwendung und Index, auf Docker Hub unter
+  `ksrigganthan/hr-policy-assistant`. Dazu eine `docker-compose.yml`, die Ollama als zweiten
+  Dienst mitbringt, siehe «Betrieb mit Docker»
 - Tests für Loader und Textbereinigung, Linting mit ruff
+
+### Bewusst nicht gebaut
+
+Entscheide, keine Lücken. Jeder Punkt war möglich und ist aus einem Grund unterblieben.
+
+- **Vergleich gegen ein Cloud-Modell.** Der Aufbau trägt ihn, `gateway/llm.py` ist dafür
+  modellagnostisch und die Preistabelle rechnet in Franken. Gemessen wurde er nicht, weil das
+  Projekt den On-Premise-Fall zeigen soll und eine zugekaufte Zahl den Punkt nicht stärkt
+- **Dreistufige Bewertung im Kritiker** statt gedeckt oder nicht gedeckt. Eine Stufe ist nur
+  sinnvoll, wenn eine eigene Handlung an ihr hängt, und der Graph kennt zwei Fortsetzungen,
+  zurück zum Entwurf oder weiter zur Prüfung
+- **Multi-Agent-System mit acht bis neun Rollen.** Jeder weitere Agent kostet Zeit, Geld und eine
+  Fehlerquelle. Der Nachweis lautet nicht «neun Agenten gebaut», sondern was ein Schritt an
+  welcher Kennzahl bewirkt. Die Messung Graph gegen Agent-Loop zeigt, in welche Richtung das geht
+- **Vetorecht für den Kritiker.** Siehe «Was der Kritiker nicht kann». Mit Vetorecht hätte der
+  Lauf vom 15.09. vier richtige Antworten verworfen
+- **Chroma als eigener Serverdienst** statt eingebettet. Es gibt ein Image dafür, und der Umbau
+  wäre eine Zeile, `PersistentClient` würde zu `HttpClient`. Dagegen sprechen zwei Dinge. Es
+  widerspricht dem Entscheid, Chroma gerade wegen des fehlenden Betriebsaufwands zu wählen. Und
+  es löst das eigentliche Problem nicht, denn der Index muss trotzdem erst in das Volume des
+  Servers hinein
+- **Automatisches Ausrollen, also der CD-Teil einer Pipeline.** Siehe «Ausrollen, der Entwurf».
+  Die Hardwareanforderung ist der Grund, nicht der Aufwand
+
+### Gemessene Grenzen
+
+- **Anhänge ohne Gliederungsziffer.** Die Lohntabelle auf Seite 24 des USB-GAV liegt im Index
+  unter einem Abschnitt über Verbandskosten, weil «Anhang 3: Lohntabelle» keine Ziffer trägt und
+  deshalb keinen neuen Abschnitt auslöst. Der Chunk ist über die Vektorsuche nicht auffindbar
+- **Vokabular-Lücke im Retrieval.** Siehe «Wenn das Stichwort im Dokument fehlt». Eine Frage, die
+  kein Wort des richtigen Abschnitts trifft, findet ihn nicht, und die Antwort ist dann falsch,
+  ohne dass eine Prüfung anschlägt
+- **Rauschband der Kennzahlen.** Das Modell antwortet auch bei temperature 0 nicht in jedem Lauf
+  gleich. Wie stark die Zahlen ohne jede Änderung schwanken, ist nicht gemessen. Deshalb gilt in
+  diesem README ein Unterschied von einer Einheit in 40 nicht als Ergebnis. Beobachtet wurde das
+  am 16.09. auf `gemma3:12b`. Ob `qwen2.5:14b` sich gleich verhält, ist ebenfalls nicht gemessen,
+  und es gibt keinen Grund anzunehmen, dass es besser ist
+- **Aktualitätsprüfung.** Beide Fassungen sind von 2015 und 2016, das Metadatenfeld `status`
+  steht auf `unbekannt`. Die Daten dafür liegen an jedem Chunk, die Regel fehlt
+- **Tests für die Prüfregeln und für die Schnittstelle.** Loader und Textbereinigung sind
+  getestet, `pruefung.py` und die Endpunkte nicht
 
 ### Fehlt noch
 
-- Anhänge ohne Gliederungsziffer. Die Lohntabelle auf Seite 24 des USB-GAV liegt im Index unter
-  einem Abschnitt über Verbandskosten, weil «Anhang 3: Lohntabelle» keine Ziffer trägt und deshalb
-  keinen neuen Abschnitt auslöst. Der Chunk ist über die Vektorsuche nicht auffindbar
-- Ein verlässlicher Kritiker. Der Knoten steht und hat die bekannte Halluzination gefangen,
-  liegt aber im Lauf vom 15.09. in vier von vier offenen Beanstandungen falsch, siehe
-  «Workflow mit Kritik-Rolle»
-- Das Rauschband der Kennzahlen. Solange nicht gemessen ist, wie stark die Zahlen ohne jede
-  Änderung schwanken, ist ein Unterschied von einer Einheit in 40 nicht interpretierbar
-- Tests für die Prüfregeln und für die Schnittstelle
-- Aktualitätsprüfung. Beide Fassungen sind von 2015 und 2016, das Feld `status` steht auf `unbekannt`
-- Docker-Image und GitHub-Actions-CI. Beides ist für das Ende des Sprints vorgesehen, heute
-  existiert weder ein Dockerfile noch ein Workflow
+- Ein verlässlicher Kritiker. Der Knoten steht, hat die bekannte Halluzination gefangen und ist
+  seit dem 18.09. und dem 15.10. zweimal nachgebessert worden. Seine Trefferquote liegt trotzdem
+  bei rund einem Fünftel, siehe «Was der Kritiker nicht kann»
+- GitHub-Actions-CI mit Test- und Eval-Gate
 
-### Arbeitsskripte im Wurzelverzeichnis
+### Prüfskripte im Wurzelverzeichnis
 
-Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Alle sind in
-`.gitignore` eingetragen.
+Zwei Sorten. Die erste prüft im Betrieb von Hand nach und steht in `.gitignore`.
 
 - `frage.py` stellt fünf feste Testfragen an den Index und zeigt zu jedem Treffer Abstand, Dokument, Seite, Ziffer, Titel und Textanfang
 - `antworte.py` stellt dieselben fünf Fragen End-to-End über `auskunft.antworte` und druckt Auskunft, Mängel und Messwerte
@@ -81,6 +123,22 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 - `kosten.py` liest das Protokoll und zeigt pro Aufruf Tokens, Dauer und Kosten sowie die Summen
 - `teste_graph.py` schickt den Chefärzte-Fall einmal durch den Graphen und druckt den Verlauf
   jeder Runde, also den Abnahmetest von Hand
+
+Die zweite Sorte gehört zu einer bestimmten Messung und liegt deshalb im Repository. Sie belegt,
+wie eine Aussage in diesem README zustande gekommen ist.
+
+- `zeige_ablauf.py` lässt einen Lauf über `GRAPH.stream()` laufen und zeigt je Knoten, welche
+  Felder er geändert hat. Mit `--bild` gibt es das Mermaid-Diagramm aus dem kompilierten Graphen
+- `kritik_ab.py` legt dem Kritiker vier Fehlalarm-Sätze einzeln vor, mit zwei Prompt-Fassungen.
+  Hat gezeigt, dass der Prompt nicht die Ursache war, 0 von 4 mit und ohne geänderte Zahlenregel
+- `kritik_ablation.py` erzeugt echte Entwürfe und legt sie dem Kritiker in vier Formen vor, zwei
+  Faktoren mal zwei. Das ist die Messung, die die Ursache gefunden hat
+- `lauf_graph_qwen.py` fährt denselben Graphen und dasselbe Eval-Set auf `qwen2.5:14b`. Nötig,
+  weil der Agent-Loop Tool-Calling braucht und `gemma3:12b` das nicht kann. Ohne diesen Lauf
+  würde der Vergleich zwei Modelle messen statt zwei Steuerungen
+- `rauchtest_agent.py` schickt einen einzigen Fall durch den Agent-Loop, bevor das ganze Set läuft
+- `zaehle_agentlauf.py` liest `logs/llm.jsonl` und zählt, wie viele Aufrufe eines Agentenlaufs
+  Steuerungsaufrufe mit Werkzeugwahl waren
 
 ## Architektur
 
@@ -99,6 +157,8 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 12. `pruefe` in `pruefung.py` vergleicht die Auskunft mit den Metadaten der Treffer und gibt eine Liste von Mängeln zurück
 13. `stelle_frage` in `api/main.py` setzt Auskunft, Mängel und Messwerte zu einem `Ergebnis` zusammen und gibt es als JSON zurück
 14. `antworte_mit_kritik` in `workflow/graph.py` ist der zweite Weg zu einer Antwort. Er führt dieselben Schritte in vier Knoten aus und schiebt zwischen Entwurf und Prüfung eine Kritik ein
+15. `antworte_mit_agent` in `workflow/agent.py` ist der dritte Weg. Die Schritte sind dieselben, aber sie liegen als Werkzeuge bereit, und das Modell wählt bei jedem Durchgang selbst, welches es ruft
+16. `oberflaeche` in `api/routen/oberflaeche.py` liefert unter `GET /` eine HTML-Seite aus, die ihrerseits `POST /frage` aufruft. Ein Ursprung, ein Prozess, kein CORS
 
 ### Ablauf einer Anfrage
 
@@ -110,6 +170,10 @@ Skripte, die nicht Teil des Pakets sind, sondern zum Prüfen von Hand dienen. Al
 Die vier Bahnen sind die vier Schichten aus dem Abschnitt oben. Die Richtung der Pfeile ist
 zugleich die Abhängigkeitsrichtung im Code. `pruefung.py` kennt weder die API noch das Gateway,
 es bekommt eine `Auskunft` und die Treffer und gibt eine Liste von Mängeln zurück.
+
+Das Bild zeigt den einstufigen Weg. Graph und Agent-Loop setzen auf denselben Bausteinen auf und
+unterscheiden sich nur darin, in welcher Reihenfolge sie diese aufrufen. Deshalb kostete der
+dritte Weg eine Datei und kein zweites System.
 
 **[Interaktive Fassung öffnen](https://ksriganthan.github.io/hr-policy-assistant/ablauf-anfrage.html)**
 mit Zoom, Suche, Fokus auf einen Knoten und Verfolgung der Beziehungen. Sie liegt als
@@ -201,9 +265,9 @@ sich Änderungen am Code von Zufall unterscheiden lassen.
 
 **Erste Messung an den fünf Testfragen.** Vier von fünf inhaltlich richtig,
 alle fünf mit Belegnummern, rund 1000 Prompt-Tokens und 14 bis 16 Sekunden pro
-Antwort auf einer RTX 5070 Ti. Die Zahlen stammen aus Woche 1, vor strukturierter
-Ausgabe und längerem Systemprompt. Die Baseline weiter unten misst den heutigen
-Stand mit rund der dreifachen Prompt-Länge. Zwei Befunde daraus.
+Antwort auf einer RTX 5070 Ti, damals mit `gemma3:12b`. Die Zahlen stammen aus Woche 1,
+vor strukturierter Ausgabe und längerem Systemprompt, und sind nicht mit den Tabellen unter
+«Resultate» vergleichbar. Zwei Befunde daraus.
 
 Bei der Frage nach 20 Dienstjahren lag der richtige Chunk auf Platz 2, und die
 Antwort war trotzdem falsch. Aus «10 Tage» wurde «CHF 10», weil die Tabelle im
@@ -254,8 +318,9 @@ Ollama nicht erreichbar, Zeitüberschreitung, abgebrochene Verbindung. Ein falsc
 Modellname wird nicht wiederholt, der geht beim dritten Mal genauso schief.
 
 **Kosten.** Aus Tokenzahlen und einer Preistabelle je Modell, Eingabe und Ausgabe
-getrennt, in CHF pro Million Tokens. Lokale Modelle stehen mit null drin. Beim
-Cloud-Vergleich in Woche 5 wächst nur die Tabelle, der Code bleibt gleich.
+getrennt, in CHF pro Million Tokens. Lokale Modelle stehen mit null drin. Für ein
+Cloud-Modell wüchse nur die Tabelle, der Code bliebe gleich. Gemessen wurde das nicht,
+siehe «Bewusst nicht gebaut».
 
 **Ein Befund aus dem Test.** Ollama beendet, Skript gestartet, Ollama neu gestartet. Der
 erste Lauf scheiterte, bevor die Wiederholung greifen konnte, weil das Embedding der
@@ -335,6 +400,13 @@ die Beanstandungen der Vorrunde als Zusatzauftrag an den Prompt. `kritisieren` l
 neben die Belegstellen und gibt ein `Kritik`-Objekt zurück mit `gedeckt`, den beanstandeten
 Sätzen im Wortlaut und einer Begründung. `pruefen` ruft `pruefe()` und beendet den Lauf.
 
+**`kritisieren` macht einen Aufruf je Haus, und jeder sieht nur die Belegstellen seines Hauses.**
+Das steht so seit zwei Korrekturen, die beide dieselbe Ursache hatten, und ist der Teil dieses
+Systems, der am meisten über Fehlersuche sagt. Die Einzelheiten stehen unter «Was der Kritiker
+nicht kann». Die Nummerierung der Belegstellen bleibt dabei die des ganzen Treffersatzes, dafür
+nimmt `baue_prompt` die ursprünglichen Nummern entgegen. Würde je Haus neu ab eins gezählt,
+zeigte `belegstellen: [3]` im Entwurf auf eine andere Stelle als `[3]` beim Kritiker.
+
 Der Zustand ist ein `TypedDict` mit zehn Feldern, darunter `runde`, `verlauf` für das Mitlesen
 und `aufrufe`, über das der Eval-Runner die Tokens mehrerer Modellaufrufe summiert. Knoten geben
 keine fertigen Ergebnisse zurück, sondern Änderungsmeldungen, die LangGraph in den Zustand
@@ -364,7 +436,7 @@ falsche Aussage ist durch eine belegte ersetzt und nicht durch ein Schweigen, un
 Anforderung: ein Vergleichslauf mit mehr Kontext hatte dieselbe Halluzination zwar entfernt,
 aber nur, indem das Modell die Auskunft verweigerte.
 
-### Was er nicht kann, gemessen am 15.09.2026
+### Was der Kritiker nicht kann
 
 Von zwanzig Fällen lösten acht einen Rücksprung aus, vier davon enden mit `gedeckt = False`. **In
 allen vier ist die beanstandete Aussage richtig**, drei davon sind fast wörtliche Zitate aus der
@@ -391,23 +463,156 @@ nächsten Woche.
 ungedeckte Antworten.** Und deshalb ist es gut, dass der Kritiker nicht verwerfen darf. Mit
 Vetorecht hätte dieser Lauf vier richtige Antworten weggeworfen.
 
+#### Die Ursache, gefunden am 17.09. durch Ablation
+
+Zwei naheliegende Erklärungen wurden geprüft und beide verworfen. Der Prompt war es nicht,
+`kritik_ab.py` ergab 0 von 4 mit und ohne geänderte Zahlenregel. Die Belegstellen-Liste im
+übergebenen Text war es auch nicht.
+
+Gefunden hat sie `kritik_ablation.py`, zwei Faktoren mal zwei. Beide Häuser im übergebenen
+Entwurf ergeben 3 bis 4 Fehlalarme von 4, ein Haus allein 1 von 4. **Der Kritiker prüfte eine
+USB-Aussage gegen die Belegstellen beider Häuser, fand eine widersprechende Zahl und las den
+Widerspruch als fehlende Deckung.** Bei Fall 18 beanstandete er «USB gewährt zwei Arbeitstage»,
+weil das KSBL drei gewährt.
+
+#### Zwei Korrekturen mit derselben Wurzel
+
+**18.09., ein Aufruf je Haus.** Vorher ging der zusammengefügte Entwurf beider Häuser in einem
+Aufruf an den Kritiker. Die Urteile werden seither mit `all()` zusammengefasst, `kritik` und
+`beanstandungen` behalten Name und Typ, deshalb laufen `wie_weiter()` und der Eval-Runner
+unverändert weiter.
+
+| Lauf `2026-09-18_0107` gegen `2026-09-17_1715` | vorher | nachher |
+|---|---|---|
+| Rücksprung ausgelöst | 7 von 20 | 2 von 20 |
+| am Ende nicht gedeckt | 4 von 20 | 1 von 20 |
+| Dauer des ganzen Laufs | 18.3 min | 15.9 min |
+
+Der ehrliche Teil dieses Ergebnisses: **die Trefferquote blieb bei rund 20 Prozent**, 5
+Beanstandungen mit 1 berechtigten gegen vorher 11 mit 2. Der Kritiker ist nicht klüger geworden,
+er greift seltener ein, und die schädlichen Eingriffe sind entfallen. Die Laufzeit sank, statt zu
+steigen, weil der zusätzliche Aufruf pro Runde weniger kostet als die eingesparten ganzen Runden
+bringen. Die Vorhersage von rund 31 Minuten war falsch.
+
+**15.10., die Belegstellen mit.** Getrennt waren bis dahin nur die Aufrufe, nicht das Material.
+Dem KSBL-Kritiker lagen weiterhin alle vier Treffer vor, zwei davon vom USB, und er beanstandete
+eine KSBL-Aussage mit Verweis auf eine USB-Belegstelle. Seither bekommt jeder Aufruf nur die
+Treffer seines Hauses, und ein Haus ohne eigenen Treffer wird ganz übersprungen, weil ein
+Kritik-Aufruf ohne Belegstellen nur erfinden kann.
+
+An der Frage nach dem Vaterschaftsurlaub, einem Einzelfall und keinem Lauf:
+
+| | vorher | nachher |
+|---|---|---|
+| Modellaufrufe | 6 | 3 |
+| Runden | 2 | 1 |
+| Modellzeit | 95.0 s | 41.1 s |
+| Tokens ein | 8650 | 3444 |
+| Antwort | richtig | unverändert richtig |
+
+**Merksatz aus beiden Korrekturen.** Getrennte Aufrufe genügen nicht, wenn beide dasselbe
+Material sehen. Die Trennung muss bis zum Material reichen, sonst findet das Modell dort den
+Widerspruch, den die Trennung verhindern sollte.
+
+## Agent-Loop als Vergleich
+
+Der dritte Weg, `workflow/agent.py`. Er löst dieselbe Aufgabe mit demselben Material, aber die
+Reihenfolge der Schritte steht nicht im Code.
+
+| | Workflow, `graph.py` | Agent-Loop, `agent.py` |
+|---|---|---|
+| Wer bestimmt die Reihenfolge | der Code, als Kanten zwischen Knoten | das Modell, bei jedem Durchgang neu |
+| Was im Code steht | vier Knoten, drei feste Kanten, eine Verzweigung | eine Werkzeugliste und eine Schleife |
+| `MAX_RUNDEN` | 2, also höchstens ein Rücksprung | 8, als Notbremse gegen Kosten |
+| Abbruch möglich | nein | ja, und er kommt vor |
+
+Die drei Werkzeuge sind `suche_dokumente`, `entwurf_schreiben` und `pruefe_auskunft`, dazu
+`antwort_abgeben` als Signal zum Aufhören. Zwei Vorkehrungen stehen in der Schleife, weil das
+Modell beides tatsächlich versucht hat. Schreibt es freien Text statt ein Werkzeug zu wählen,
+bekommt es die Aufforderung zurück, eines zu wählen. Ruft es `antwort_abgeben`, ohne dass ein
+Entwurf existiert, wird das abgelehnt.
+
+`antworte_mit_agent()` gibt dieselben Felder zurück wie `antworte_mit_kritik()`, zusätzlich
+`status` und `abbruchgrund`. Deshalb wertet derselbe Eval-Runner beide Wege aus, und deshalb
+behandelt auch `routen/frage.py` beide in einem Zweig.
+
+**Der Modellbefund.** `gemma3:12b` kann kein Tool-Calling und bringt den Agent-Loop sofort zum
+Absturz. Der Vergleich läuft deshalb auf `qwen2.5:14b`, und der Graph wurde auf demselben Modell
+nachgemessen. Ohne diesen Nachlauf hätte der Vergleich zwei Modelle gemessen statt zwei
+Steuerungen. Das Skript dazu ist `lauf_graph_qwen.py`.
+
+Die Zahlen stehen unter «Resultate».
+
+## Wenn das Stichwort im Dokument fehlt
+
+Der aufschlussreichste Einzelfall des Projekts, Fall 3, Vaterschaftsurlaub. Die KSBL-Antwort
+nannte zwölf Monate, das Eval-Set verlangt zehn Tage. Es sah aus wie eine Halluzination und war
+keine.
+
+Die Treffer wurden direkt aus der Chroma-SQLite gelesen, ohne Modellaufruf und ohne Kosten.
+
+| Befund | Beleg |
+|---|---|
+| Der richtige Abschnitt ist KSBL Ziff. 11.13 «Bezahlte und unbezahlte Kurzabsenzen» | 2163 Zeichen, eine Aufzählung von Heirat über Todesfall bis Umzug. Die zehn Tage sind darin ein Listenpunkt |
+| Das Wort «Vaterschaft» kommt im ganzen KSBL-GAV kein einziges Mal vor | nur USB Ziff. 2.5.6 heisst «Vaterschaftsurlaub» |
+| Die zwölf Monate stammen aus KSBL Ziff. 11.15 «Elternurlaub» | 599 Zeichen, «unbezahlter Urlaub bis zu zwölf Monaten» nach der Geburt eines Kindes |
+
+**Das Modell hat den falschen Abschnitt korrekt wiedergegeben.** Zwei Wirkungen überlagern sich.
+Die Frage trifft kein Stichwort des richtigen Abschnitts, weil das Dokument das Wort nicht
+verwendet. Und der richtige Abschnitt ist lang und behandelt zehn Themen, der falsche ist kurz
+und behandelt genau eines, deshalb gewinnt der thematisch konzentrierte Nachbar.
+
+Zwei Erklärungen wurden dabei widerlegt. Der Gliederungspfad steht sehr wohl im eingebetteten
+Text, `index.py` setzt `einbett_text` aus Pfad und Abschnittstext zusammen; `documents=` trägt
+bewusst nur den Rohtext, damit ein Zitat wörtlich bleibt. Und der Abschnitt wurde nicht
+zerschnitten, geschnitten wird an Gliederungsziffern, ein Abschnitt ist ein Chunk.
+
+**Merksatz.** Eine Vektorsuche findet, was ähnlich formuliert ist, nicht, was anwendbar ist.
+Fehlt das Stichwort im Dokument, hilft kein besserer Prompt und keine zusätzliche Prüfstufe,
+sondern nur ein anderes Retrieval.
+
+**Die Grenze dieses Befunds.** Der gemessene Rang von Ziff. 11.13 in der Ähnlichkeitsliste ist
+nicht erhoben, dafür bräuchte es einen Embedding-Aufruf je Kandidat. Gezeigt ist, woher die
+falsche Zahl kam, nicht, wie knapp der richtige Abschnitt verfehlt wurde.
+
 ## API
 
-`api/main.py` stellt zwei Endpunkte bereit.
+`api/main.py` stellt drei Endpunkte bereit.
 
 | Methode | Pfad | Zweck |
 |---|---|---|
 | `GET` | `/gesund` | Lebenszeichen ohne Modellaufruf |
 | `POST` | `/frage` | Frage beantworten, prüfen und mit Messwerten zurückgeben |
+| `GET` | `/` | Bedienoberfläche, eine HTML-Datei aus demselben Prozess |
 
-Die Anfrage kommt als `FrageAnfrage` mit der Frage und optional einem Haus. Die Frage ist
-auf 5 bis 500 Zeichen begrenzt, und zwar auf der Serverseite. Eine Grenze, die nur ein
-Client kennt, ist keine Grenze.
+Jeder Endpunkt liegt als eigener Router unter `api/routen/`, `main.py` erzeugt nur die
+Anwendung und hängt sie ein. `/gesund` kommt bewusst ohne Modellaufruf aus. Ein Lebenszeichen
+soll sagen, ob der Dienst läuft, nicht ob Ollama antwortet, sonst dauerte jede Prüfung eine
+halbe Minute.
 
-Zurück geht ein `Ergebnis` mit der Auskunft, der Mängelliste aus `pruefe`, dem verwendeten
-Modell, der Dauer und den Kosten. Mängel führen bewusst nicht zu einem Fehlercode. Die
-Antwort existiert, sie hat nur einen Makel, und der Aufrufer soll entscheiden, was er damit
-macht.
+Die Anfrage kommt als `FrageAnfrage` mit der Frage, optional einem Haus und dem Feld `weg`.
+Die Frage ist auf 5 bis 500 Zeichen begrenzt, und zwar auf der Serverseite. Eine Grenze, die
+nur ein Client kennt, ist keine Grenze.
+
+| `weg` | Funktion | Modellaufrufe |
+|---|---|---|
+| `einstufig`, Vorgabe | `auskunft.antworte` | 1 |
+| `workflow` | `graph.antworte_mit_kritik` | 2 bis 4 |
+| `agent` | `agent.antworte_mit_agent` | 3 bis 8 |
+
+Die Vorgabe `einstufig` ist bewusst gewählt. Jeder bestehende Aufruf ohne das neue Feld
+verhält sich genau wie vorher.
+
+Zurück geht ein `Ergebnis` mit der Auskunft, den Belegstellen, der Mängelliste aus `pruefe`,
+dem gelaufenen Weg, dem Verlauf und den Messwerten. **Dauer, Kosten und Tokens sind Summen über
+alle Aufrufe eines Laufs**, und `aufrufe` sagt, über wie viele. Ein Feld, das bei einem Weg etwas
+anderes bedeutet als beim anderen, wäre ein Fehler im Schema und nicht in der Anzeige.
+
+`auskunft` darf `None` sein. Nur der Agent-Loop kann abbrechen, bevor ein Entwurf steht, und
+dann soll die Oberfläche «abgebrochen» anzeigen können statt einen Serverfehler.
+
+Mängel führen bewusst nicht zu einem Fehlercode. Die Antwort existiert, sie hat nur einen Makel,
+und der Aufrufer soll entscheiden, was er damit macht.
 
 Die Signatur `def stelle_frage(anfrage: FrageAnfrage) -> Ergebnis` ist zugleich die
 Spezifikation. Aus ihr entstehen die Prüfung der eingehenden Daten, die Form der Antwort und
@@ -416,8 +621,94 @@ diese Beschreibung als bedienbares Formular. Geschrieben ist davon keine Zeile, 
 sie nicht von der Implementierung abweichen.
 
 ```bash
-uv run uvicorn hr_policy_assistant.api.main:app --reload
+uv run python -m uvicorn hr_policy_assistant.api.main:app --reload
 ```
+
+Danach liegt die Oberfläche unter `http://127.0.0.1:8000/` und die erzeugte
+Schnittstellenbeschreibung unter `/docs`.
+
+## Betrieb mit Docker
+
+Zwei Wege, und sie haben verschiedene Zwecke.
+
+### Nur die Anwendung im Container
+
+Ollama läuft auf dem Rechner, die Anwendung im Container. Das ist der **schnelle** Weg, weil
+Ollama dabei die Grafikkarte des Rechners nutzt.
+
+```bash
+docker build -t hr-policy-assistant:0.2.0 .
+docker run --rm -p 8000:8000 hr-policy-assistant:0.2.0
+```
+
+Der Container erreicht Ollama über `host.docker.internal`, den Namen, den Docker Desktop für
+den Rechner einrichtet. Im Dockerfile steht dafür `OLLAMA_HOST`.
+
+**`OLLAMA_HOST` und nicht `OLLAMA_BASE_URL`.** Der Code ruft `ollama.chat` und `ollama.embed`
+auf Modulebene auf, ohne eigenes Client-Objekt, und die Bibliothek liest dafür `OLLAMA_HOST`.
+Das kostete beim ersten Containerlauf eine Viertelstunde Fehlersuche.
+
+### Beide Dienste über compose
+
+```bash
+docker compose up
+docker compose exec ollama ollama pull bge-m3
+docker compose exec ollama ollama pull qwen2.5:14b
+```
+
+`docker-compose.yml` beschreibt zwei Dienste, und im Compose-Netz finden sie sich über ihren
+Dienstnamen. Deshalb steht dort `OLLAMA_HOST: http://ollama:11434` statt
+`host.docker.internal`. Die Modelle landen in einem benannten Volume und überstehen
+`docker compose down`.
+
+**Dieser Weg ist portabel, nicht schnell.** Ollama im Container sieht die Grafikkarte
+standardmässig nicht und rechnet auf der CPU. Für `qwen2.5:14b` heisst das Minuten statt
+Sekunden pro Antwort. Zum Vorführen reicht es, zum Messen nicht. Alle Zahlen in diesem README
+stammen vom ersten Weg.
+
+### Was im Image liegt und was nicht
+
+| | |
+|---|---|
+| Anwendung und Abhängigkeiten | im Image |
+| Der Chroma-Index | **im Image**, rund 3 MB |
+| Die GAV-Dateien | nicht im Image |
+| `.env`, Protokolle, virtuelle Umgebung | nicht im Image, siehe `.dockerignore` |
+
+Der Index geht mit, weil beide GAV öffentlich abrufbar sind und das Image dadurch ohne
+Zusatzschritt läuft. Die PDF selbst bleiben draussen, dort ändert sich nichts.
+
+Der Build-Kontext liegt dank `.dockerignore` bei rund 1 MB statt 374 MB. Den Unterschied macht
+fast vollständig `.venv`, die ausserdem Windows-Pfade enthält und im Container unbrauchbar wäre.
+
+**Reihenfolge der Schichten.** Erst `pyproject.toml` und `uv.lock`, dann die Installation, dann
+der Index, dann der Code. Eine geänderte Schicht macht alle darunter ungültig, und so bleibt die
+teure Installation beim Ändern einer Codezeile im Cache. Gemessen 9.2 Sekunden beim ersten Bau
+gegen 0.0 beim zweiten.
+
+## Ausrollen, der Entwurf
+
+Nicht gebaut, und hier steht, warum und wie es aussähe.
+
+**Was eine laufende Installation braucht.**
+
+| Teil | Woher |
+|---|---|
+| Das Image | Docker Hub, `docker pull ksrigganthan/hr-policy-assistant:0.2.0` |
+| Ollama mit zwei Modellen | rund 10 GB, dazu eine Grafikkarte mit mindestens 12 GB |
+| Ein Reverse Proxy mit TLS | wenn der Dienst nicht nur lokal erreichbar sein soll |
+
+**Warum es hier nicht gebaut ist.** Der verfügbare Server ist ein Hetzner CAX11 mit 4 GB
+Arbeitsspeicher und zwei ARM-Kernen. `qwen2.5:14b` braucht rund 9 GB. Ein Ausrollen dorthin
+würde entweder ein deutlich kleineres Modell erzwingen, womit die gemessenen Zahlen nicht mehr
+gelten, oder ein Cloud-Modell, was dem On-Premise-Gedanken widerspricht. Beides sind
+Verschlechterungen, keine Fortschritte, und deshalb ist der Verzicht die Entscheidung.
+
+**Wie die Strecke aussähe.** Die CI baut das Image und schiebt es mit dem Commit-Kurzhash als
+Tag in eine Registry. Ein Schritt danach meldet sich auf dem Zielserver an und ersetzt den
+laufenden Container durch den neuen, mit `docker compose pull` und `docker compose up -d`. Der
+Healthcheck auf `/gesund` entscheidet, ob der neue Stand übernommen oder zurückgerollt wird.
+Die Zugangsdaten liegen als Secrets im Repository, nie in der Workflow-Datei.
 
 ## Technische Entscheide
 
@@ -430,7 +721,7 @@ uv run uvicorn hr_policy_assistant.api.main:app --reload
 | Tabellen | über `extract_tables` in Satzform, Seite in Bändern gelesen | Kopfzeile jedem Chunk voranstellen, Tabellenzeilen anhängen | die Zuordnung steht dann im Text selbst und übersteht Chunking und Retrieval, und kein Inhalt steht doppelt |
 | Kopfzeile erkennen | Heuristik über die Zellenlänge, Schwelle 30 | Schriftauszeichnung über `page.chars`, Liste von Hand | ein PDF speichert die Auszeichnung nicht. Die Alternativen sind deutlich mehr Code für drei Tabellen oder beim nächsten Dokument kaputt. Ein Fehlgriff kostet Zuordnung, nicht Inhalt |
 | Embedding-Modell | `bge-m3` über Ollama | multilingual-e5, jina-embeddings-v3 | läuft lokal, muss bei Indexbau und Abfrage identisch sein, ein Wechsel erzwingt den Neuaufbau |
-| Sprachmodell | `gemma3:12b` über Ollama | qwen3:14b, Cloud-API | passt in 12 GB Grafikspeicher, Deutsch, kein Denkmodus. Vergleich mit Cloud folgt |
+| Sprachmodell | `qwen2.5:14b` über Ollama, umschaltbar über `HRPA_MODELL` | gemma3:12b, Cloud-API | läuft lokal und kann Tool-Calling, was der Agent-Loop braucht. `gemma3:12b` war bis zum 22.09. der Standard und trägt die Baseline vom 13.09., stürzt im Agent-Loop aber sofort ab |
 | Temperatur | 0 | Standard | reproduzierbare Antworten sind Voraussetzung für Evals |
 | Gateway | eine Datei für Chat und Embedding, ein Rückgabeobjekt | direkter Aufruf an jeder Stelle | Protokoll, Wiederholungen und Kosten stehen an einer Stelle. Der Retry-Test hat gezeigt, dass ein Aufruf am Gateway vorbei alles davon verliert |
 | Protokollformat | JSON Lines, eine Zeile pro Aufruf | eine JSON-Datei, SQLite | anhängen ohne Lesen, Zeile für Zeile auswertbar, im Editor lesbar |
@@ -440,7 +731,13 @@ uv run uvicorn hr_policy_assistant.api.main:app --reload
 | Prüfung | eigenes Modul, deterministisch, vier Regeln | Prüfung im Prompt, Prüfung durch ein zweites Modell | gleiche Eingabe, gleiches Ergebnis, begründbar und ohne Kosten. Ein Modell für diese Aufgabe wäre teurer und unzuverlässiger |
 | Mängel in der Antwort | mit Status 200 zurückgeben | Fehlercode werfen, Mängel verschweigen | ein Mangel ist keine gescheiterte Anfrage. Verschweigen wäre schlimmer als benennen |
 | Schema im Gateway | als `dict` übergeben | Gateway kennt Pydantic | das Gateway bleibt die eine Stelle zu Ollama und muss über den Rest des Programms nichts wissen |
-| Workflow vs. Agent | offen | fester Graph, Agent-Loop | wird nach dem LangGraph-Aufbau entschieden und hier mit Messwerten nachgetragen |
+| Workflow vs. Agent | fester Graph | Agent-Loop | auf demselben Eval-Set und demselben Modell gemessen. Der Graph gewinnt in jeder Spalte, siehe «Resultate». Für eine Aufgabe mit immer gleicher Schrittfolge ist Flexibilität kein Vorteil, sondern eine Fehlerquelle |
+| Kritik je Haus | ein Aufruf und ein Belegstellensatz je Haus | ein Aufruf für beide Häuser | durch Ablation belegt. Beide Häuser in einem Aufruf ergaben 3 bis 4 Fehlalarme von 4, ein Haus allein 1 von 4 |
+| Oberfläche | eine HTML-Datei, ausgeliefert von derselben Anwendung | Streamlit, React | ein Ursprung, ein Prozess, ein Container, kein CORS und kein Build-Schritt. Die Seite lädt nichts aus dem Netz nach, was zu einem System passt, dessen Argument Datenhoheit ist |
+| Schriften in der Oberfläche | nur Schriften des Betriebssystems | Google Fonts | eine Seite, die beim Öffnen einen fremden Server anfragt, widerspricht dem On-Premise-Gedanken. Preis ist, dass die Darstellung je nach Rechner leicht abweicht |
+| Index im Image | ja, rund 3 MB | Volume beim Start einhängen | beide GAV sind öffentlich abrufbar, und so läuft das Image ohne Zusatzschritt. Der Preis ist, dass eine Neuindexierung ein neues Image bedeutet |
+| Ollama im Compose-Verbund | als eigener Dienst, aber nur für den portablen Weg | nur auf dem Rechner voraussetzen | der Container sieht die Grafikkarte nicht und rechnet auf der CPU. Als Beschreibung der Abhängigkeit ist er trotzdem wertvoll, als Messumgebung nicht |
+| Basis-Image | `python:3.12-slim` | `python:3.12`, Alpine | slim spart rund 350 MB gegenüber der vollen Variante. Alpine nutzt musl statt glibc, und vorkompilierte Räder für chromadb gibt es dafür nicht |
 
 ## Evals
 
@@ -460,9 +757,16 @@ und die andere falsch sein kann.
 uv run python -m hr_policy_assistant.evals.lauf
 ```
 
-### Baseline, 13.09.2026
+Der Lauf nimmt das Modell aus `HRPA_MODELL`, Standard ist `qwen2.5:14b`. Welches Modell
+gelaufen ist, steht im Dateinamen der erzeugten CSV.
 
-gemma3:12b, temperature 0, fünf Läufe. Massgeblich ist der fünfte.
+### Historische Baseline, 13.09.2026
+
+**Auf `gemma3:12b`, dem damaligen Standardmodell.** Diese Zahlen bleiben hier, weil sie die
+Entwicklung tragen und die Befunde darunter aus ihnen stammen. Mit dem heutigen Standard sind
+sie **nicht** vergleichbar, dafür steht die Tabelle unter «Workflow gegen Agent-Loop».
+
+temperature 0, fünf Läufe. Massgeblich ist der fünfte.
 
 | Kennzahl | Wert | von |
 |---|---|---|
@@ -522,22 +826,51 @@ nichts Neues. Das ist die Aufgabe der Kritik-Rolle, und der Chefärzte-Fall ist 
 
 ## Resultate
 
+Zwei Tabellen, zwei Modelle. Die erste zeigt, wie die Aufbauten in Woche 3 und 4 auf dem
+damaligen Standardmodell aufeinander folgten. Die zweite ist der **massgebliche Vergleich**,
+beide Wege auf demselben heutigen Modell gemessen.
+
+### Aufbauten auf `gemma3:12b`, Woche 3 und 4
+
 | Setup | Ziffer getroffen | Pflichtbegriffe | Verbotsbegriffe | Strukturmängel | CHF/Anfrage | p95 |
 |---|---|---|---|---|---|---|
 | Baseline (naives RAG), 13.09. | 28/31 | 35/40 | 38/40 | 12 | 0.000000 | 46.2 s |
 | dieselbe mit Belegstellen-Regel, 14.09. | 28/31 | 34/40 | 39/40 | 0 | 0.000000 | 39.3 s |
 | LangGraph + Kritik-Rolle, 15.09. | 28/31 | 35/40 | 38/40 | 1 | 0.000000 | 119.0 s |
-| Agent-Loop | – | – | – | – | – | – |
-| On-Premise gegen Cloud | – | – | – | – | – | – |
-
-Die offenen Zeilen werden gefüllt, sobald der jeweilige Aufbau steht und am selben Eval-Set
-gemessen ist.
 
 **Der Graph kostet dreimal so viel Kontext**, 90610 Eingabe-Tokens gegen 30338, und
 zweieinhalbmal so viel Ausgabe. Dafür ist der Chefärzte-Fall inhaltlich richtig geworden. Ob die
 Differenzen von einer Einheit in den übrigen Spalten etwas bedeuten, ist offen, siehe die
 Einschränkung zur Reproduzierbarkeit weiter oben. Die Zeile steht hier mit dieser Einschränkung
 und nicht als Fortschrittsmeldung.
+
+### Workflow gegen Agent-Loop, 25.09.2026
+
+Beide auf `qwen2.5:14b`, dasselbe Eval-Set, dieselben zwanzig Fälle. Der Graph wurde auf diesem
+Modell eigens nachgemessen, damit der Vergleich zwei Steuerungen misst und nicht zwei Modelle.
+
+| Kennzahl | Workflow | Agent-Loop |
+|---|---|---|
+| Fälle durchgelaufen | 20 von 20 | **17 von 20** |
+| Ziffer getroffen | 28/31, 90.3 % | 20/25, 80.0 % |
+| `frage_beantwortet` stimmt | 38/40, 95.0 % | 29/34, 85.3 % |
+| Pflichtbegriffe vollständig | 31/40, 77.5 % | 24/34, 70.6 % |
+| Verbotsbegriffe, keiner gefunden | 33/40 | 29/34 |
+| Strukturmängel | 0 | 0 |
+| Dauer p50 / p95 | 50.6 s / 121.3 s | 88.1 s / 178.8 s |
+| Tokens je Fall, ein / aus | 7897 / 518 | 13861 / 837 |
+
+**Die Nenner laufen auseinander, weil der Agent drei Fälle nicht beendet hat.** Deshalb stehen
+hier Prozentwerte neben den rohen Zahlen. Zählt man die drei Abbrüche als Fehlschlag, steht der
+Agent bei `frage_beantwortet` auf 29 von 40, also 72.5 Prozent gegen 95.0.
+
+**Der Graph gewinnt in jeder Spalte.** Er ist genauer, doppelt so schnell und braucht 43 Prozent
+weniger Kontext je Fall. Dass er nie abbricht, ist kein Zufall, sondern die Eigenschaft eines
+Ablaufs, der im Code steht statt bei jedem Schritt neu entschieden zu werden.
+
+**Die Grenze dieses Ergebnisses.** Es gilt für eine Aufgabe mit immer gleicher Schrittfolge,
+nämlich eine Frage an zwei feste Dokumente. Dort ist Flexibilität wertlos. Bei einer Aufgabe,
+deren Schritte vorher nicht feststehen, kippt das Urteil, und dann verliert der Graph.
 
 Aus Woche 1 zusätzlich die Retrieval-Precision, an fünf Testfragen von Hand beurteilt, k=2
 gleich 1.0 und k=4 zwischen 0.6 und 0.7. Fünf Fragen sind eine kleine Stichprobe, die Zahl ist
@@ -551,8 +884,14 @@ Vorausgesetzt sind Python 3.12 oder neuer, uv und ein laufendes Ollama.
 uv sync
 cp .env.example .env
 ollama pull bge-m3
-ollama pull gemma3:12b
+ollama pull qwen2.5:14b
 ```
+
+`bge-m3` ist Pflicht, mit einem anderen Embedding-Modell liegen Index und Frage in
+verschiedenen Räumen und die Suche liefert Unsinn, ohne abzustürzen. `qwen2.5:14b` ist der
+Standard für Chat und als einziges der beiden Modelle tool-fähig. Wer die Baseline vom 13.09.
+nachstellen will, braucht zusätzlich `ollama pull gemma3:12b` und setzt
+`HRPA_MODELL=gemma3:12b`.
 
 Der Korpus liegt nicht im Repository, weil ein GAV ein privatrechtlicher Vertrag
 der Sozialpartner ist und kein amtliches Werk. Beide PDF-Dateien müssen von Hand nach
@@ -574,3 +913,23 @@ uv run ruff check .
 
 Der Indexbau schreibt nach `chroma/` und meldet am Ende die Anzahl Chunks. Die
 Tests, die das PDF brauchen, überspringen sich selbst, wenn der Korpus fehlt.
+
+Danach startet der Dienst mit
+
+```bash
+uv run python -m uvicorn hr_policy_assistant.api.main:app --reload
+```
+
+Wer nicht selbst bauen will, nimmt stattdessen das fertige Image.
+
+```bash
+docker run --rm -p 8000:8000 ksrigganthan/hr-policy-assistant:0.2.0
+```
+
+Darin ist der Index bereits enthalten, die PDF braucht es dafür nicht. Ollama muss auf dem
+Rechner laufen. Einzelheiten unter «Betrieb mit Docker».
+
+**Unter Windows kann eine Anwendungssteuerungsrichtlinie die Starthüllen in `.venv\Scripts`
+blockieren**, erkennbar an `os error 4551`. Dann funktionieren die Befehle in der Form
+`uv run python -m <werkzeug>`, also `python -m uvicorn`, `python -m pytest` und `python -m ruff`
+statt der direkten Aufrufe. Aus diesem Grund steht hier durchgehend die lange Form.

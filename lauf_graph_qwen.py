@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Neue Baseline. Derselbe Graph, dasselbe Eval-Set, nur auf qwen2.5:14b statt gemma3:12b.
 
 Noetig, weil der Agent-Loop Tool-Calling braucht und gemma3 das nicht kann. Ohne diesen

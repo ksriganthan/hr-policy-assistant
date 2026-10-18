@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Ein einziger Durchlauf durch den Agent-Loop, bevor das ganze Eval-Set laeuft.
 
 Schreibt alles nach rauchtest_agent.log in UTF-8, damit die Bruecke die Datei lesen kann.
