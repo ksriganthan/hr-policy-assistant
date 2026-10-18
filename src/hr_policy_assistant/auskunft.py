@@ -62,10 +62,15 @@ def suche(frage: str, spital: str | None = None):
     return list(zip(t["documents"][0], t["metadatas"][0], t["distances"][0], strict=True))
 
 
-def baue_prompt(frage: str, treffer) -> str:
-    """Belegstellen nummeriert und mit Herkunft, danach die Frage."""
+def baue_prompt(frage: str, treffer, nummern: list[int] | None = None) -> str:
+    """Belegstellen nummeriert und mit Herkunft, danach die Frage.
+
+    nummern erlaubt eine Teilmenge der Treffer mit ihren urspruenglichen Nummern. Der
+    Kritiker bekommt seit dem 15.10.2026 nur die Belegstellen des Hauses, das er prueft,
+    und die muessen dieselbe Nummer tragen wie im Entwurf. Ohne nummern wird ab 1 gezaehlt.
+    """
     teile = []
-    for i, (text, m, _) in enumerate(treffer, start=1):
+    for i, (text, m, _) in zip(nummern or range(1, len(treffer) + 1), treffer, strict=True):
         kopf = (
             f"[{i}] {m['dokument']} Ziff. {m['nummer']} {m['titel']} "
             f"(S. {m['seite']}, Stand {m['stand']})"

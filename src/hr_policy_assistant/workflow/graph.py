@@ -111,19 +111,41 @@ def entwerfen(z: Zustand) -> dict:
 
 
 def kritisieren(z: Zustand) -> dict:
-    """Ein Kritik-Aufruf pro Haus. Kein Aufruf sieht den Text des anderen Hauses.
+    """Ein Kritik-Aufruf pro Haus, mit den Belegstellen nur dieses Hauses.
 
-    Geaendert am 18.09.2026. Vorher ein einziger Aufruf mit dem zusammengefuegten Entwurf
-    beider Haeuser. Die Ablation vom 17.09. hat gezeigt, dass der Kritiker dann eine
-    USB-Aussage gegen die Belegstellen beider Haeuser prueft, eine widersprechende Zahl
-    findet und den Widerspruch als fehlende Deckung liest. Ein Haus je Aufruf senkt die
-    Fehlalarme in der Messung von 3 bis 4 von 4 auf 1 von 4.
+    Geaendert am 18.09.2026: ein Aufruf je Haus statt einem fuer beide. Die Ablation vom
+    17.09. hatte gezeigt, dass der Kritiker sonst eine USB-Aussage gegen die Belegstellen
+    beider Haeuser prueft, eine widersprechende Zahl findet und den Widerspruch als
+    fehlende Deckung liest.
+
+    Nachgebessert am 15.10.2026: getrennt waren nur die Aufrufe, nicht die Belegstellen.
+    Dem KSBL-Kritiker lagen weiterhin alle vier Treffer vor, und er hat eine KSBL-Aussage
+    mit einer USB-Belegstelle beanstandet. Jetzt bekommt jeder Aufruf nur die Treffer
+    seines Hauses, mit den urspruenglichen Nummern.
     """
     kritiken, aufrufe, zeilen = [], [], []                    # sammeln statt einmal zuweisen
 
-    for s in z["auskunft"].spitaeler:                         # NEU: Schleife, vorher ein Aufruf fuer beide
-        entwurf = f"{s.spital}: {s.text} (genannte Belegstellen: {s.belegstellen})"
-        nutzer = baue_prompt(z["frage"], z["treffer"]) + f"\n\nZu pruefende Auskunft:\n{entwurf}"
+    for s in z["auskunft"].spitaeler:
+        # Treffer dieses Hauses heraussuchen und dabei die Position merken. t[1] sind die
+        # Metadaten, t[1]["dokument"] ist USB oder KSBL. start=1, weil der Entwurf ab 1 zaehlt.
+        eigene = [(i, t) for i, t in enumerate(z["treffer"], start=1) if t[1]["dokument"] == s.spital]
+
+        if not eigene:                                        # kein Treffer aus diesem Haus unter den vier
+            kritiken.append(Kritik(                           # dann gibt es nichts zu pruefen, und ein
+                gedeckt=True,                                 # Modellaufruf ohne Belegstellen kostet nur
+                beanstandungen=[],                            # Zeit und erfindet Beanstandungen
+                begruendung=f"Keine Belegstelle aus {s.spital} unter den Treffern.",
+            ))
+            zeilen.append(f"Runde {z['runde']} Kritik {s.spital}: uebersprungen, keine eigene Belegstelle")
+            continue
+
+        nummern = [i for i, _ in eigene]
+        treffer_haus = [t for _, t in eigene]
+
+        # Kein Praefix mehr mit dem Hausnamen. Der Aufruf sieht nur noch ein Haus, der Name
+        # war damit Beiwerk, das der Kritiker gelegentlich als Teil der Aussage gelesen hat.
+        entwurf = f"{s.text} (genannte Belegstellen: {s.belegstellen})"
+        nutzer = baue_prompt(z["frage"], treffer_haus, nummern) + f"\n\nZu pruefende Auskunft:\n{entwurf}"
 
         a = frage_modell(system=KRITIK_SYSTEM, nutzer=nutzer, schema=Kritik.model_json_schema())
         k = Kritik.model_validate_json(a.text)
@@ -131,11 +153,11 @@ def kritisieren(z: Zustand) -> dict:
         kritiken.append(k)                                    # ein Urteil je Haus
         aufrufe.append(a)                                     # ein Aufruf je Haus, zaehlt bei Tokens und Kosten
         zeilen.append(
-            f"Runde {z['runde']} Kritik {s.spital}: "         # Hausname NEU im Verlauf, sonst nicht zuordenbar
+            f"Runde {z['runde']} Kritik {s.spital}: "         # Hausname im Verlauf, sonst nicht zuordenbar
             f"gedeckt={k.gedeckt}, beanstandet={k.beanstandungen}"
         )
 
-    gesamt = Kritik(                                          # NEU: die Urteile zu einem zusammenfassen
+    gesamt = Kritik(                                          # die Urteile zu einem zusammenfassen
         gedeckt=all(k.gedeckt for k in kritiken),             # nur gedeckt, wenn JEDES Haus gedeckt ist
         beanstandungen=[b for k in kritiken for b in k.beanstandungen],   # alle in eine flache Liste
         begruendung=" | ".join(k.begruendung for k in kritiken),
@@ -144,10 +166,9 @@ def kritisieren(z: Zustand) -> dict:
     return {
         "kritik": gesamt,                                     # wie_weiter liest weiterhin kritik.gedeckt
         "beanstandungen": gesamt.beanstandungen,              # entwerfen liest weiterhin diese Liste
-        "aufrufe": z["aufrufe"] + aufrufe,                    # jetzt zwei statt einer pro Runde
-        "verlauf": z["verlauf"] + zeilen,                     # jetzt zwei Zeilen statt einer
+        "aufrufe": z["aufrufe"] + aufrufe,                    # ein bis zwei pro Runde
+        "verlauf": z["verlauf"] + zeilen,                     # eine Zeile je Haus
     }
-
 
 
 def pruefen(z: Zustand) -> dict:
