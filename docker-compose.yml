@@ -1,0 +1,36 @@
+services:
+  # ---------------------------------------------------------------
+  # Ollama als eigener Dienst. Der Name "ollama" ist zugleich der
+  # Hostname, unter dem ihn die anderen Dienste im Netz erreichen.
+  ollama:
+    image: ollama/ollama:0.40.6          # feste Version, nicht :latest
+    volumes:
+      # - ollama-modelle:/root/.ollama   # sauberer Weg, zieht die Modelle im Container neu
+      - C:/Users/kapis/.ollama:/root/.ollama   # Bind-Mount auf die schon vorhandenen Modelle
+    ports:
+      - "11434:11434"                    # nur noetig, wenn du von Windows aus hineinwillst
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12                        # bis zu zwei Minuten, Ollama startet langsam
+
+  # ---------------------------------------------------------------
+  # Deine Anwendung.
+  api:
+    image: ksrigganthan/hr-policy-assistant:0.2.0
+    # build: .                           # stattdessen einkommentieren, um lokal zu bauen
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_HOST: http://ollama:11434   # der Dienstname, kein host.docker.internal
+      HRPA_MODELL: qwen2.5:14b
+    depends_on:
+      ollama:
+        condition: service_healthy       # startet erst, wenn Ollamas Healthcheck gruen ist
+
+# -------------------------------------------------------------------
+# Benannte Volumes. Nur noetig, wenn oben wieder auf ollama-modelle
+# umgestellt wird.
+# volumes:
+#   ollama-modelle:

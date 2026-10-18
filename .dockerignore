@@ -1,0 +1,48 @@
+# Build-Kontext klein halten. Was hier steht, sieht der Daemon gar nicht erst.
+
+# Virtuelle Umgebung. 364 MB mit Windows-Pfaden darin, im Container unbrauchbar.
+.venv/
+venv/
+
+# Versionsverwaltung und Editor-Kram
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Python-Zwischenstand
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Daten und Indizes. Der Korpus ist urheberrechtlich nicht im Repo, der Index
+# wird beim Start eingehaengt statt eingebacken.
+data/
+logs/
+*.log
+
+# Geheimnisse. Gehoert nie in ein Image, auch nicht versehentlich.
+.env
+.env.local
+
+# Pruefskripte aus der Wurzel, die nicht Teil des Pakets sind
+frage.py
+antworte.py
+zeige_index.py
+zeige_ablauf.py
+messung.py
+kosten.py
+test_embed.py
+test_llm.py
+teste_graph.py
+kritik_ab.py
+kritik_ablation.py
+lauf_graph_qwen.py
+rauchtest_agent.py
+zaehle_agentlauf.py
+
+# Doku und Tests braucht das laufende Image nicht
+docs/
+tests/
+evals/
