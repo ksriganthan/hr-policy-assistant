@@ -6,114 +6,230 @@
 <title>GAV-Auskunft</title>
 <style>
   :root {
-    --grund: #ffffff; --text: #1a1a1a; --leise: #5c5c5c; --linie: #d8d8d8;
-    --feld: #f7f7f7; --akzent: #1c4f8b; --warn-grund: #fff4e5; --warn-linie: #d98c00;
-    --leer-grund: #f2f2f2;
+    --grund:#fbfbfc; --flaeche:#ffffff; --text:#16181b; --leise:#63666d;
+    --linie:#e0e1e5; --linie-stark:#c6c8cf;
+    --usb:#0f5c63; --usb-flach:#e8f2f2;
+    --ksbl:#4a3b7a; --ksbl-flach:#eeebf6;
+    --gut:#1f6b46; --gut-flach:#e9f4ee;
+    --warn:#8a5a00; --warn-flach:#fbf2e0;
+    --serif: "Iowan Old Style","Charter","Bitstream Charter","Sitka Text",Cambria,Georgia,serif;
+    --sans: "Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --grund: #16181c; --text: #e8e8e8; --leise: #a0a0a0; --linie: #34383f;
-      --feld: #1e2127; --akzent: #7aa8dd; --warn-grund: #2e2515; --warn-linie: #d98c00;
-      --leer-grund: #1b1d22;
+      --grund:#121417; --flaeche:#181b1f; --text:#e6e7e9; --leise:#9b9ea6;
+      --linie:#2b2f35; --linie-stark:#3d424a;
+      --usb:#6fbfc4; --usb-flach:#13262a;
+      --ksbl:#a79adb; --ksbl-flach:#1e1b2c;
+      --gut:#6fc295; --gut-flach:#13231b;
+      --warn:#e0a449; --warn-flach:#2a2112;
     }
   }
-  * { box-sizing: border-box; }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
   body {
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: var(--grund); color: var(--text);
-    max-width: 52rem; margin: 0 auto; padding: 2rem 1rem 4rem; line-height: 1.55;
+    margin:0; background:var(--grund); color:var(--text);
+    font-family:var(--sans); line-height:1.5;
+    font-variant-numeric:tabular-nums;
   }
-  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
-  .unter { color: var(--leise); margin: 0 0 2rem; }
-  label { display: block; font-weight: 600; margin-bottom: .35rem; }
-  textarea, select {
-    width: 100%; font: inherit; padding: .6rem .7rem;
-    background: var(--grund); color: var(--text);
-    border: 1px solid var(--linie); border-radius: 6px;
+  .huelle { max-width:64rem; margin:0 auto; padding:2.5rem 1.25rem 5rem; }
+
+  /* Kopf */
+  .kopf { border-bottom:2px solid var(--text); padding-bottom:.75rem; margin-bottom:2rem; }
+  .kopf h1 {
+    font-family:var(--serif); font-size:1.75rem; font-weight:600;
+    letter-spacing:-.01em; margin:0;
   }
-  textarea { resize: vertical; }
-  .reihe { display: flex; gap: 1rem; align-items: flex-end; margin-top: 1rem; flex-wrap: wrap; }
-  .reihe > div { flex: 0 0 10rem; }
-  button {
-    font: inherit; font-weight: 600; padding: .6rem 1.2rem; cursor: pointer;
-    background: var(--akzent); color: #fff; border: 0; border-radius: 6px;
+  .kopf p { margin:.3rem 0 0; color:var(--leise); font-size:.9rem; max-width:46rem; }
+
+  /* Frageblock */
+  .frageblock { display:grid; gap:1rem; margin-bottom:.5rem; }
+  label { display:block; font-size:.8rem; font-weight:600; letter-spacing:.01em; margin-bottom:.4rem; }
+  textarea {
+    width:100%; font:inherit; font-size:1.05rem; padding:.7rem .8rem; resize:vertical;
+    background:var(--flaeche); color:var(--text);
+    border:1px solid var(--linie-stark); border-radius:4px;
   }
-  button:disabled { opacity: .55; cursor: default; }
-  .beispiele { margin: 1rem 0 0; display: flex; gap: .5rem; flex-wrap: wrap; }
+  textarea:focus-visible, select:focus-visible, button:focus-visible {
+    outline:2px solid var(--text); outline-offset:2px;
+  }
+  .steuerung { display:flex; gap:1.5rem; align-items:flex-end; flex-wrap:wrap; }
+  select {
+    font:inherit; padding:.45rem .6rem; background:var(--flaeche); color:var(--text);
+    border:1px solid var(--linie-stark); border-radius:4px;
+  }
+
+  /* Wegewahl */
+  .wege { display:flex; border:1px solid var(--linie-stark); border-radius:4px; overflow:hidden; }
+  .wege button {
+    font:inherit; font-size:.88rem; padding:.45rem .8rem; cursor:pointer;
+    background:var(--flaeche); color:var(--text); border:0; border-right:1px solid var(--linie);
+    display:flex; flex-direction:column; gap:.1rem; align-items:flex-start; line-height:1.25;
+  }
+  .wege button:last-child { border-right:0; }
+  .wege button[aria-pressed="true"] { background:var(--text); color:var(--grund); }
+  .wege small { font-size:.72rem; opacity:.7; font-variant-numeric:tabular-nums; }
+
+  .senden {
+    font:inherit; font-weight:600; font-size:.95rem; padding:.6rem 1.4rem; cursor:pointer;
+    background:var(--text); color:var(--grund); border:0; border-radius:4px; margin-left:auto;
+  }
+  .senden:disabled { opacity:.4; cursor:default; }
+
+  .beispiele { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:1rem; }
   .beispiele button {
-    background: transparent; color: var(--akzent); border: 1px solid var(--linie);
-    font-weight: 400; padding: .3rem .6rem; font-size: .9rem;
+    font:inherit; font-size:.82rem; padding:.25rem .6rem; cursor:pointer;
+    background:transparent; color:var(--leise);
+    border:1px solid var(--linie); border-radius:999px;
   }
-  #meldung { min-height: 1.5rem; margin: 1.25rem 0 0; color: var(--leise); }
-  #meldung.fehler { color: #c0392b; font-weight: 600; }
-  .karte { border: 1px solid var(--linie); border-radius: 8px; padding: 1rem 1.15rem; margin-top: 1.25rem; }
-  .karte.leer { background: var(--leer-grund); }
-  .karte h2 { font-size: 1.1rem; margin: 0 0 .2rem; display: flex; align-items: center; gap: .6rem; }
-  .marke {
-    font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-    padding: .15rem .45rem; border-radius: 4px; border: 1px solid var(--linie); color: var(--leise);
+  .beispiele button:hover { color:var(--text); border-color:var(--linie-stark); }
+
+  /* Statuszeile */
+  .status { margin:1.75rem 0 0; min-height:1.4rem; font-size:.9rem; color:var(--leise); }
+  .status.fehler { color:var(--warn); font-weight:600; }
+  .uhr { font-variant-numeric:tabular-nums; }
+
+  /* Synopse */
+  .synopse { display:grid; grid-template-columns:1fr 1fr; gap:0; margin-top:1.75rem;
+             border:1px solid var(--linie); border-radius:6px; overflow:hidden; background:var(--flaeche); }
+  .synopse.einzeln { grid-template-columns:1fr; }
+  .haus { padding:1.25rem 1.35rem 1.5rem; border-right:1px solid var(--linie); }
+  .haus:last-child { border-right:0; }
+  .haus.usb { border-top:3px solid var(--usb); }
+  .haus.ksbl { border-top:3px solid var(--ksbl); }
+  .haus h2 { font-size:.78rem; font-weight:700; letter-spacing:.06em; margin:0 0 .15rem; }
+  .haus.usb h2 { color:var(--usb); }
+  .haus.ksbl h2 { color:var(--ksbl); }
+  .haus .lang { font-size:.78rem; color:var(--leise); margin:0 0 .9rem; }
+  .aussage { font-family:var(--serif); font-size:1.12rem; line-height:1.55; margin:0; }
+  .haus.ohne .aussage { color:var(--leise); font-style:italic; font-size:1rem; }
+
+  .belege { margin-top:1.1rem; padding-top:.8rem; border-top:1px solid var(--linie); }
+  .belege > span { font-size:.72rem; font-weight:700; letter-spacing:.05em; color:var(--leise); }
+  details.beleg { margin-top:.45rem; }
+  details.beleg summary {
+    cursor:pointer; font-size:.88rem; display:flex; gap:.5rem; align-items:baseline;
   }
-  .karte p { margin: .5rem 0 0; }
-  .quellen { margin-top: .9rem; border-top: 1px solid var(--linie); padding-top: .7rem; }
-  .quellen > strong { font-size: .85rem; color: var(--leise); text-transform: uppercase; letter-spacing: .03em; }
-  details { margin-top: .5rem; }
-  summary { cursor: pointer; font-weight: 600; }
+  .ziffer {
+    font-weight:700; font-variant-numeric:tabular-nums; flex:0 0 auto;
+    padding:.05rem .35rem; border-radius:3px; font-size:.82rem;
+  }
+  .usb .ziffer { background:var(--usb-flach); color:var(--usb); }
+  .ksbl .ziffer { background:var(--ksbl-flach); color:var(--ksbl); }
   .zitat {
-    margin: .5rem 0 0; padding: .6rem .8rem; background: var(--feld);
-    border-left: 3px solid var(--akzent); border-radius: 0 4px 4px 0;
-    white-space: pre-wrap; font-size: .93rem;
+    font-family:var(--serif); font-size:.95rem; line-height:1.5; white-space:pre-wrap;
+    margin:.5rem 0 0 .4rem; padding:.55rem .8rem; border-left:2px solid var(--linie-stark);
+    color:var(--text);
   }
-  .kopfzeile { font-size: .85rem; color: var(--leise); margin: 0 0 .25rem; }
-  .warn { background: var(--warn-grund); border: 1px solid var(--warn-linie); border-radius: 8px; padding: .9rem 1.15rem; margin-top: 1.25rem; }
-  .warn ul { margin: .4rem 0 0; padding-left: 1.2rem; }
-  .messung { margin-top: 1.5rem; font-size: .85rem; color: var(--leise); }
-  .messung dl { display: grid; grid-template-columns: auto 1fr; gap: .2rem 1rem; margin: .5rem 0 0; }
-  .messung dt { font-weight: 600; }
-  .messung dd { margin: 0; }
-  .hinweis { margin-top: 1.25rem; font-size: .93rem; color: var(--leise); }
+  .herkunft { font-size:.75rem; color:var(--leise); margin:.35rem 0 0 .4rem; }
+
+  .hinweis {
+    margin-top:1rem; padding:.7rem .9rem; font-size:.9rem; color:var(--leise);
+    border:1px dashed var(--linie-stark); border-radius:4px;
+  }
+
+  /* Prüfband */
+  .band {
+    display:flex; align-items:center; gap:.7rem; flex-wrap:wrap;
+    margin-top:1rem; padding:.7rem 1rem; border-radius:6px; font-size:.9rem;
+  }
+  .band.gut { background:var(--gut-flach); color:var(--gut); }
+  .band.warn { background:var(--warn-flach); color:var(--warn); }
+  .band strong { font-weight:700; }
+  .band ul { margin:.3rem 0 0; padding-left:1.1rem; width:100%; }
+
+  /* Messung */
+  .messung { margin-top:1.5rem; border-top:1px solid var(--linie); padding-top:1rem; }
+  .zahlen { display:flex; gap:1.75rem; flex-wrap:wrap; margin:0 0 .4rem; }
+  .zahl { }
+  .zahl b { display:block; font-size:1.25rem; font-weight:600; font-variant-numeric:tabular-nums; }
+  .zahl span { font-size:.72rem; color:var(--leise); letter-spacing:.03em; }
+  .messung > details { margin-top:.9rem; }
+  .messung > details > summary { font-size:.88rem; color:var(--leise); cursor:pointer; }
+  ol.verlauf { font-size:.85rem; margin:.7rem 0 0; padding-left:1.4rem; }
+  ol.verlauf li { margin-bottom:.2rem; }
+  ol.verlauf li::marker { color:var(--leise); }
+
+  @media (max-width:40rem) {
+    .synopse { grid-template-columns:1fr; }
+    .haus { border-right:0; border-bottom:1px solid var(--linie); }
+    .senden { margin-left:0; width:100%; }
+  }
+  @media (prefers-reduced-motion:no-preference) {
+    .synopse, .band, .messung { animation:auf .25s ease-out; }
+    @keyframes auf { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  }
 </style>
 </head>
 <body>
-  <h1>GAV-Auskunft</h1>
-  <p class="unter">Universitätsspital Basel und Kantonsspital Baselland im Vergleich.
-     Jede Aussage beruht auf Belegstellen, die unten mitgeliefert werden.</p>
+<div class="huelle">
 
-  <label for="frage">Ihre Frage</label>
-  <textarea id="frage" rows="3" maxlength="500"
-            placeholder="Wie lange dauert der Vaterschaftsurlaub?"></textarea>
+  <header class="kopf">
+    <h1>GAV-Auskunft</h1>
+    <p>Fragen zu den Gesamtarbeitsverträgen des Universitätsspitals Basel und des
+       Kantonsspitals Baselland. Jede Aussage wird gegen die Belegstelle geprüft, aus der
+       sie stammt.</p>
+  </header>
 
-  <div class="reihe">
+  <div class="frageblock">
     <div>
-      <label for="spital">Haus</label>
-      <select id="spital">
-        <option value="">beide vergleichen</option>
-        <option value="USB">nur USB</option>
-        <option value="KSBL">nur KSBL</option>
-      </select>
+      <label for="frage">Frage</label>
+      <textarea id="frage" rows="2" maxlength="500"
+                placeholder="Wie lange dauert der Vaterschaftsurlaub?"></textarea>
     </div>
-    <button id="senden">Frage stellen</button>
+
+    <div class="steuerung">
+      <div>
+        <label for="spital">Haus</label>
+        <select id="spital">
+          <option value="">beide vergleichen</option>
+          <option value="USB">nur Universitätsspital</option>
+          <option value="KSBL">nur Kantonsspital</option>
+        </select>
+      </div>
+
+      <div>
+        <label id="weg-label">Weg zur Antwort</label>
+        <div class="wege" role="group" aria-labelledby="weg-label" id="wege"></div>
+      </div>
+
+      <button class="senden" id="senden">Frage stellen</button>
+    </div>
   </div>
 
   <div class="beispiele" id="beispiele"></div>
 
-  <p id="meldung" role="status" aria-live="polite"></p>
+  <p class="status" id="status" role="status" aria-live="polite"></p>
   <div id="ergebnis"></div>
 
+</div>
+
 <script>
+const WEGE = [
+  { id:"einstufig", name:"Einstufig",  takt:"1 Aufruf" },
+  { id:"workflow",  name:"Workflow",   takt:"2 bis 4"  },
+  { id:"agent",     name:"Agent-Loop", takt:"3 bis 8"  },
+];
 const BEISPIELE = [
   "Wie lange dauert der Vaterschaftsurlaub?",
   "Wie viele Ferientage stehen mir mit 45 Jahren zu?",
   "Beteiligt sich das Spital an einer Weiterbildung?",
+  "Wie lange dauert die Probezeit?",
 ];
-const ZEITGRENZE_MS = 120000;          // lokale Modelle brauchen lange, aber nicht unbegrenzt
+const HAUSNAME = { USB:"Universitätsspital Basel", KSBL:"Kantonsspital Baselland" };
+const ZEITGRENZE_MS = 300000;      // der Agent-Loop darf bis zu acht Aufrufe machen
 
-const knopf = document.getElementById("senden");
-const feldFrage = document.getElementById("frage");
+let gewaehlterWeg = "workflow";    // der Weg mit Kritik-Rolle ist die Vorgabe, er ist das Ergebnis des Projekts
+let uhrLaeuft = null;
+
+const feldFrage  = document.getElementById("frage");
 const feldSpital = document.getElementById("spital");
-const meldung = document.getElementById("meldung");
-const ergebnis = document.getElementById("ergebnis");
+const knopf      = document.getElementById("senden");
+const status     = document.getElementById("status");
+const ergebnis   = document.getElementById("ergebnis");
 
-/* Baut ein Element. textContent statt innerHTML, siehe Erklaerung im Chat. */
+/* Baut ein Element. textContent statt innerHTML: der Zitattext kommt aus einem PDF und
+   darf nie als Markup gelesen werden. */
 function el(tag, klasse, text) {
   const n = document.createElement(tag);
   if (klasse) n.className = klasse;
@@ -121,126 +237,216 @@ function el(tag, klasse, text) {
   return n;
 }
 
-BEISPIELE.forEach((b) => {                       // Beispielfragen als Knoepfe, damit niemand leer startet
-  const k = el("button", null, b);
-  k.addEventListener("click", () => { feldFrage.value = b; feldFrage.focus(); });
-  document.getElementById("beispiele").appendChild(k);
+/* Wegewahl aufbauen */
+const wege = document.getElementById("wege");
+WEGE.forEach((w) => {
+  const b = el("button");
+  b.type = "button";
+  b.dataset.weg = w.id;
+  b.setAttribute("aria-pressed", String(w.id === gewaehlterWeg));
+  b.appendChild(el("span", null, w.name));
+  b.appendChild(el("small", null, w.takt));
+  b.addEventListener("click", () => {
+    gewaehlterWeg = w.id;
+    wege.querySelectorAll("button").forEach((x) =>
+      x.setAttribute("aria-pressed", String(x.dataset.weg === w.id)));
+  });
+  wege.appendChild(b);
 });
 
-feldFrage.addEventListener("keydown", (e) => {   // Ctrl+Enter sendet, Enter bleibt Zeilenumbruch
+/* Beispielfragen */
+const bsp = document.getElementById("beispiele");
+BEISPIELE.forEach((b) => {
+  const k = el("button", null, b);
+  k.type = "button";
+  k.addEventListener("click", () => { feldFrage.value = b; feldFrage.focus(); });
+  bsp.appendChild(k);
+});
+
+feldFrage.addEventListener("keydown", (e) => {        // Strg+Enter sendet, Enter bleibt Umbruch
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) knopf.click();
 });
 
-/* Eine Belegstelle als aufklappbarer Block. */
-function belegstelleBlock(b) {
-  const d = el("details");
-  const s = el("summary", null, `[${b.nummer}] ${b.dokument} Ziff. ${b.ziffer} ${b.titel}`);
+/* Eine Belegstelle, aufklappbar. Der Zitattext ist der Chunk, den das Modell gelesen hat. */
+function belegBlock(b) {
+  const d = el("details", "beleg");
+  const s = el("summary");
+  s.appendChild(el("span", "ziffer", "Ziff. " + b.ziffer));
+  s.appendChild(el("span", null, b.titel));
   d.appendChild(s);
+
   const teile = [];
-  if (b.seite !== null && b.seite !== undefined) teile.push("Seite " + b.seite);
-  if (b.stand) teile.push("Stand " + b.stand);
-  if (b.distanz !== null && b.distanz !== undefined) teile.push("Distanz " + b.distanz.toFixed(3));
-  if (teile.length) d.appendChild(el("p", "kopfzeile", teile.join(" · ")));
-  d.appendChild(el("p", "zitat", b.text));       // der Chunk-Text, genau wie das Modell ihn gelesen hat
+  if (b.seite != null)   teile.push("Seite " + b.seite);
+  if (b.stand)           teile.push("Stand " + b.stand);
+  if (b.distanz != null) teile.push("Abstand " + b.distanz.toFixed(3));
+  if (teile.length) d.appendChild(el("p", "herkunft", teile.join(", ")));
+
+  d.appendChild(el("p", "zitat", b.text));
   return d;
 }
 
-/* Eine Haus-Karte. */
-function spitalKarte(s, alleBelege) {
-  const karte = el("div", s.frage_beantwortet ? "karte" : "karte leer");
+/* Eine Spalte der Synopse. */
+function hausSpalte(s, alleBelege) {
+  const kl = s.spital.toLowerCase() + (s.frage_beantwortet ? "" : " ohne");
+  const sp = el("div", "haus " + kl);
 
-  const h = el("h2", null, s.spital === "USB" ? "Universitätsspital Basel" : "Kantonsspital Baselland");
-  h.appendChild(el("span", "marke", s.frage_beantwortet ? "geregelt" : "keine Regelung gefunden"));
-  karte.appendChild(h);
-  karte.appendChild(el("p", null, s.text));
+  sp.appendChild(el("h2", null, s.spital));
+  sp.appendChild(el("p", "lang", HAUSNAME[s.spital] || ""));
+  sp.appendChild(el("p", "aussage", s.text));
 
   if (s.belegstellen.length) {
-    const q = el("div", "quellen");
-    q.appendChild(el("strong", null, "Belegstellen"));
+    const q = el("div", "belege");
+    q.appendChild(el("span", null, s.belegstellen.length === 1 ? "BELEGSTELLE" : "BELEGSTELLEN"));
     s.belegstellen.forEach((nr) => {
-      const b = alleBelege.find((x) => x.nummer === nr);        // Nummer aufloesen, sonst steht nur eine Zahl da
-      if (b) q.appendChild(belegstelleBlock(b));
-      else q.appendChild(el("p", "kopfzeile", `[${nr}] nicht in der Trefferliste`));
+      const b = alleBelege.find((x) => x.nummer === nr);     // Nummer in die Stelle aufloesen
+      q.appendChild(b ? belegBlock(b)
+                      : el("p", "herkunft", "[" + nr + "] nicht in der Trefferliste"));
     });
-    karte.appendChild(q);
+    sp.appendChild(q);
   }
-  return karte;
+  return sp;
 }
 
-/* Die ganze Antwort aufbauen. */
-function zeige(daten) {
-  ergebnis.replaceChildren();                    // alte Antwort restlos weg, kein Rest von vorher
-
-  daten.auskunft.spitaeler.forEach((s) => ergebnis.appendChild(spitalKarte(s, daten.belegstellen)));
-
-  if (daten.auskunft.hinweis) {
-    ergebnis.appendChild(el("p", "hinweis", "Hinweis: " + daten.auskunft.hinweis));
-  }
-
-  if (daten.maengel.length) {                    // nur bei Befund sichtbar, dann aber sofort und ungeklappt
-    const w = el("div", "warn");
-    w.appendChild(el("strong", null, "Die automatische Prüfung hat Mängel gefunden"));
+/* Prüfband. Erscheint immer, auch ohne Befund: die Pruefung ist das Merkmal des Systems. */
+function pruefband(maengel) {
+  const b = el("div", "band " + (maengel.length ? "warn" : "gut"));
+  b.appendChild(el("strong", null, maengel.length
+    ? "Prüfung: " + maengel.length + (maengel.length === 1 ? " Mangel" : " Mängel")
+    : "Prüfung: ohne Befund"));
+  b.appendChild(el("span", null, maengel.length
+    ? "Die Antwort verletzt eine Formregel."
+    : "Belegstellen vorhanden, richtig zugeordnet, Nummern gültig."));
+  if (maengel.length) {
     const ul = el("ul");
-    daten.maengel.forEach((m) => ul.appendChild(el("li", null, m)));
-    w.appendChild(ul);
-    ergebnis.appendChild(w);
+    maengel.forEach((m) => ul.appendChild(el("li", null, m)));
+    b.appendChild(ul);
+  }
+  return b;
+}
+
+/* Messblock mit den Zahlen und dem Verlauf. */
+function messblock(d) {
+  const m = el("div", "messung");
+
+  const zahlen = el("div", "zahlen");
+  [[d.aufrufe, d.aufrufe === 1 ? "MODELLAUFRUF" : "MODELLAUFRUFE"],
+   [d.dauer_s.toFixed(1) + " s", "MODELLZEIT"],
+   [d.tokens_ein.toLocaleString("de-CH"), "TOKENS EIN"],
+   [d.tokens_aus.toLocaleString("de-CH"), "TOKENS AUS"],
+   [d.runden ?? "–", "RUNDEN"],
+   [d.kosten_chf.toFixed(4), "CHF"]].forEach(([wert, bez]) => {
+    const z = el("div", "zahl");
+    z.appendChild(el("b", null, String(wert)));
+    z.appendChild(el("span", null, bez));
+    zahlen.appendChild(z);
+  });
+  m.appendChild(zahlen);
+  m.appendChild(el("p", "herkunft", "Modell " + d.modell + ", Weg " + d.weg));
+
+  if (d.verlauf.length) {
+    const det = el("details");
+    det.appendChild(el("summary", null, "Verlauf, " + d.verlauf.length + " Schritte"));
+    const ol = el("ol", "verlauf");
+    d.verlauf.forEach((v) => ol.appendChild(el("li", null, v)));
+    det.appendChild(ol);
+    m.appendChild(det);
   }
 
-  const m = el("div", "messung");                // Messwerte und alle Treffer, zugeklappt
-  const d = el("details");
-  d.appendChild(el("summary", null, daten.maengel.length
-    ? "Prüfung und Messung"
-    : "Prüfung ohne Befund, Messung anzeigen"));
-  const dl = el("dl");
-  [["Modell", daten.modell],
-   ["Dauer", daten.dauer_s.toFixed(1) + " s"],
-   ["Kosten", daten.kosten_chf.toFixed(4) + " CHF"],
-   ["Belegstellen gesucht", daten.belegstellen.length]].forEach(([k, v]) => {
-    dl.appendChild(el("dt", null, k));
-    dl.appendChild(el("dd", null, String(v)));
+  const alle = el("details");
+  alle.appendChild(el("summary", null, "Alle " + d.belegstellen.length + " Treffer aus dem Vektorstore"));
+  d.belegstellen.forEach((b) => {
+    const w = el("div", b.dokument.toLowerCase());        // faerbt die Ziffer nach Haus
+    w.appendChild(belegBlock(b));
+    alle.appendChild(w);
   });
-  d.appendChild(dl);
-  d.appendChild(el("strong", null, "Alle Treffer aus dem Vektorstore"));
-  daten.belegstellen.forEach((b) => d.appendChild(belegstelleBlock(b)));
-  m.appendChild(d);
-  ergebnis.appendChild(m);
+  m.appendChild(alle);
+
+  return m;
+}
+
+function zeige(d) {
+  ergebnis.replaceChildren();
+
+  if (!d.auskunft) {                                   // der Agent kann ohne Entwurf abbrechen
+    const b = el("div", "band warn");
+    b.appendChild(el("strong", null, "Abgebrochen"));
+    b.appendChild(el("span", null, d.abbruchgrund || "Der Lauf hat keine Auskunft erzeugt."));
+    ergebnis.appendChild(b);
+    ergebnis.appendChild(messblock(d));
+    return;
+  }
+
+  const syn = el("div", "synopse" + (d.auskunft.spitaeler.length === 1 ? " einzeln" : ""));
+  d.auskunft.spitaeler.forEach((s) => syn.appendChild(hausSpalte(s, d.belegstellen)));
+  ergebnis.appendChild(syn);
+
+  if (d.auskunft.hinweis) {
+    ergebnis.appendChild(el("p", "hinweis", "Verwandte Stelle: " + d.auskunft.hinweis));
+  }
+  if (d.status !== "ok") {
+    const b = el("div", "band warn");
+    b.appendChild(el("strong", null, "Abgebrochen"));
+    b.appendChild(el("span", null, d.abbruchgrund || ""));
+    ergebnis.appendChild(b);
+  }
+
+  ergebnis.appendChild(pruefband(d.maengel));
+  ergebnis.appendChild(messblock(d));
+}
+
+function uhrStarten() {
+  const t0 = Date.now();
+  const name = WEGE.find((w) => w.id === gewaehlterWeg).name;
+  const male = () => {
+    const s = Math.round((Date.now() - t0) / 1000);
+    status.textContent = name + " läuft lokal, " + s + " s";
+  };
+  male();
+  uhrLaeuft = setInterval(male, 1000);
+}
+
+function uhrStoppen() {
+  if (uhrLaeuft) { clearInterval(uhrLaeuft); uhrLaeuft = null; }
 }
 
 knopf.addEventListener("click", async () => {
   const frage = feldFrage.value.trim();
-  const spital = feldSpital.value;
 
   ergebnis.replaceChildren();
-  meldung.className = "";
-  meldung.textContent = "Das Modell antwortet lokal, das dauert einige Sekunden.";
+  status.className = "status uhr";
   knopf.disabled = true;
+  uhrStarten();
 
   try {
     const antwort = await fetch("/frage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frage: frage, spital: spital === "" ? null : spital }),
-      signal: AbortSignal.timeout(ZEITGRENZE_MS),   // bricht ab, statt unbegrenzt zu warten
+      body: JSON.stringify({
+        frage: frage,
+        spital: feldSpital.value === "" ? null : feldSpital.value,
+        weg: gewaehlterWeg,
+      }),
+      signal: AbortSignal.timeout(ZEITGRENZE_MS),
     });
     const daten = await antwort.json();
 
-    if (!antwort.ok) {                              // 422 und 500 sind fuer fetch erfolgreiche Antworten
-      meldung.className = "fehler";
+    if (!antwort.ok) {                          // 422 und 500 sind fuer fetch erfolgreiche Antworten
       const erste = Array.isArray(daten.detail) ? daten.detail[0] : null;
-      meldung.textContent = erste
-        ? `Eingabe abgelehnt. ${erste.loc?.join(".")}: ${erste.msg}`   // so sieht ein Pydantic-Fehler aus
-        : `Fehler ${antwort.status}. ${daten.detail ?? ""}`;
-      return;
+      throw new Error(erste
+        ? erste.loc.slice(1).join(".") + ": " + erste.msg
+        : "Fehler " + antwort.status + ". " + (daten.detail ?? ""));
     }
 
-    meldung.textContent = "";
+    status.className = "status";
+    status.textContent = "";
     zeige(daten);
   } catch (e) {
-    meldung.className = "fehler";
-    meldung.textContent = e.name === "TimeoutError"
-      ? `Keine Antwort innerhalb von ${ZEITGRENZE_MS / 1000} Sekunden. Läuft Ollama?`
-      : "Server nicht erreichbar. " + e.message;
+    status.className = "status fehler";
+    status.textContent = e.name === "TimeoutError"
+      ? "Keine Antwort innerhalb von " + (ZEITGRENZE_MS / 1000) + " Sekunden. Läuft Ollama?"
+      : e.message;
   } finally {
+    uhrStoppen();
     knopf.disabled = false;
   }
 });
