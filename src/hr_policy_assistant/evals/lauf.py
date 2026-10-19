@@ -19,6 +19,7 @@ from hr_policy_assistant.config import PROJEKT_WURZEL
 from hr_policy_assistant.pruefung import pruefe
 from hr_policy_assistant.workflow.agent import antworte_mit_agent
 from hr_policy_assistant.workflow.graph import antworte_mit_kritik
+from hr_policy_assistant.evals import herkunft
 
 FAELLE = PROJEKT_WURZEL / "evals" / "faelle.yaml"
 ERGEBNISSE = PROJEKT_WURZEL / "evals" / "ergebnisse"
@@ -260,6 +261,7 @@ def main() -> None:
 
     bewertungen = [{h: bewerte_haus(r, h) for h in HAEUSER} for r in rohdaten]
     pfad = schreibe_csv(rohdaten, bewertungen, rohdaten[0]["modell"])
+    herkunft.schreibe(pfad)                       # Fingerabdruck neben die CSV legen
     zusammenfassung(rohdaten, bewertungen)
     print(f"\nCSV: {pfad}")
 

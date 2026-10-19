@@ -1,4 +1,4 @@
-"""Eval-Gate. Liest die juengste Graph-CSV und prueft drei Schwellen.
+"""Eval-Gate. Liest die juengste Graph-CSV und prueft Herkunft und drei Schwellen.
 
 Das Gate misst nichts. Es liest ab, was der Eval-Lauf gemessen hat, und
 entscheidet ueber Exit-Code 0 oder 1. Darum laeuft es auch dort, wo kein
@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from hr_policy_assistant.config import PROJEKT_WURZEL
+from hr_policy_assistant.evals import herkunft
 
 ERGEBNISSE = PROJEKT_WURZEL / "evals" / "ergebnisse"
 HAEUSER = ("usb", "ksbl")
@@ -46,6 +47,18 @@ def lies_seiten(pfad: Path) -> list[dict]:
     ]
 
 
+def pruefe_herkunft(pfad: Path) -> list[str]:
+    """Gehoert die Messung zum Code von jetzt? Leere Liste heisst ja."""
+    jetzt = herkunft.fingerabdruck()                 # ueber die relevanten Dateien, frisch berechnet
+    damals = herkunft.lies(pfad)                     # None bei Laeufen von vor dieser Pruefung
+
+    if damals is None:
+        return [f"{pfad.name} hat keinen Fingerabdruck, Lauf stammt aus der Zeit vor dieser Pruefung"]
+    if damals != jetzt:
+        return [f"Fingerabdruck {damals} passt nicht zum Code {jetzt}, bitte neu messen"]
+    return []
+
+
 def main() -> None:
     pfad = juengste_csv()
     seiten = lies_seiten(pfad)
@@ -56,11 +69,12 @@ def main() -> None:
     verbotstreffer = sum(1 for s in seiten if s["verboten"])
 
     print(f"Eval-Gate, Grundlage {pfad.name}, {n} Seiten")
+    print(f"  Fingerabdruck     {herkunft.lies(pfad) or 'fehlt'}   Code jetzt {herkunft.fingerabdruck()}")
     print(f"  Pflichtbegriffe   {pflicht:.2f}   Schwelle >= {MIN_PFLICHTBEGRIFFE}")
     print(f"  Beantwortet       {beantwortet:.2f}   Schwelle >= {MIN_BEANTWORTET}")
     print(f"  Verbotstreffer    {verbotstreffer}      Schwelle <= {MAX_VERBOTSTREFFER}")
 
-    gruende = []                                        # alle Verstoesse sammeln, nicht beim ersten abbrechen
+    gruende = pruefe_herkunft(pfad)                  # Herkunft zuerst, sie entwertet alles andere
     if pflicht < MIN_PFLICHTBEGRIFFE:
         gruende.append(f"Pflichtbegriffe {pflicht:.2f} unter {MIN_PFLICHTBEGRIFFE}")
     if beantwortet < MIN_BEANTWORTET:
@@ -72,10 +86,10 @@ def main() -> None:
         print("\nGate zu:")
         for g in gruende:
             print(f"  - {g}")
-        sys.exit(1)                                     # 1 macht den CI-Schritt rot
+        sys.exit(1)                                  # 1 macht den CI-Schritt rot
 
     print("\nGate offen.")
-    sys.exit(0)                                         # 0 heisst in Ordnung
+    sys.exit(0)                                      # 0 heisst in Ordnung
 
 
 if __name__ == "__main__":
