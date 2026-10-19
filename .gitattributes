@@ -1,0 +1,16 @@
+# Zeilenenden. Ohne diese Datei meldet git auf Windows immer wieder Dateien als
+# geaendert, bei denen nur CRLF gegen LF getauscht wurde. Am 19.10.2026 waren das
+# 35 Dateien mit rund 1400 Zeilen Scheinaenderung.
+#
+# text=auto heisst: git speichert intern LF, checkt auf Windows mit CRLF aus.
+* text=auto eol=lf
+
+# Binaerdateien. Nie anfassen, eine Normalisierung wuerde sie zerstoeren.
+*.bin      binary
+*.sqlite3  binary
+*.png      binary
+*.jpg      binary
+*.pdf      binary
+
+# Die Eval-CSV werden von Excel gelesen und haben ein BOM. Unveraendert lassen.
+*.csv      -text

@@ -4,8 +4,10 @@ Ablauf: laden, bereinigen, an Gliederungsziffern chunken, mit Ollama einbetten,
 in Chroma ablegen. Wird direkt gestartet und einmal pro Korpusaenderung gebraucht.
 """
 
+import os
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 import chromadb
@@ -31,7 +33,13 @@ from hr_policy_assistant.ingestion.loader import (
 # --------------------------------------------------------------------------
 
 SAMMLUNG = "hr_policy"
-CHROMA_PFAD = PROJEKT_WURZEL / "chroma"
+
+# Wo der Index liegt. CHROMA_PATH ueberschreibt den Standard, damit der Index
+# an einem anderen Ort eingehaengt werden kann, etwa im Container unter /app/chroma.
+# Ein relativer Wert wird an der Projektwurzel aufgehaengt, ein absoluter gilt wie er ist.
+CHROMA_PFAD = Path(os.environ.get("CHROMA_PATH", "chroma"))
+if not CHROMA_PFAD.is_absolute():
+    CHROMA_PFAD = PROJEKT_WURZEL / CHROMA_PFAD
 
 # Ollama bekommt die Texte portionsweise statt alle 211 in einem Aufruf.
 # Drei Gruende: der Fortschritt wird sichtbar, ein Fehler ist auf einen Stapel

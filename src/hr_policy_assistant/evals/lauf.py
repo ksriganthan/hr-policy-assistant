@@ -16,10 +16,10 @@ import yaml
 
 from hr_policy_assistant.auskunft import antworte
 from hr_policy_assistant.config import PROJEKT_WURZEL
+from hr_policy_assistant.evals import herkunft
 from hr_policy_assistant.pruefung import pruefe
 from hr_policy_assistant.workflow.agent import antworte_mit_agent
 from hr_policy_assistant.workflow.graph import antworte_mit_kritik
-from hr_policy_assistant.evals import herkunft
 
 FAELLE = PROJEKT_WURZEL / "evals" / "faelle.yaml"
 ERGEBNISSE = PROJEKT_WURZEL / "evals" / "ergebnisse"
