@@ -13,10 +13,10 @@ jobs:
 
     steps:                                # WAS, von oben nach unten
       - name: Repository holen
-        uses: actions/checkout@v4         # klont dein Repo auf den Runner, sonst ist er leer
+        uses: actions/checkout@v5         # klont dein Repo auf den Runner, sonst ist er leer
 
       - name: uv installieren
-        uses: astral-sh/setup-uv@v5       # fertiger Baustein von den uv-Leuten
+        uses: astral-sh/setup-uv@v6       # fertiger Baustein von den uv-Leuten
         with:
           version: "0.5.11"               # dieselbe Version wie im Dockerfile
 
@@ -32,3 +32,15 @@ jobs:
 
       - name: Tests laufen lassen
         run: uv run pytest -q             # 17 laufen, 3 werden uebersprungen, Korpus fehlt
+
+    bauen:
+      name: Image bauen
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: Repository holen
+          uses: actions/checkout@v5        # v5 statt v4, die Node-Warnung von vorhin
+
+        - name: Image bauen
+          run: docker build -t hrpa:ci .   # der Punkt ist der Build-Kontext, wie bei dir lokal
+          # kein push, das Image bleibt auf dem Runner und wird geloescht
