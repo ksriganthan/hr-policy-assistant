@@ -33,6 +33,9 @@ jobs:
       - name: Tests laufen lassen
         run: uv run pytest -q             # 17 laufen, 3 werden uebersprungen, Korpus fehlt
 
+      - name: Eval-Gate
+        run: uv run python -m hr_policy_assistant.evals.gate   # liest die juengste CSV, kein Modell noetig
+
   bauen:                                  # Job 2, gleiche Einrueckung wie pruefen, laeuft parallel
     name: Image bauen
     runs-on: ubuntu-latest                # eine zweite, eigene Maschine
