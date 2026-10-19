@@ -28,8 +28,11 @@ venv/
 data/raw/*
 !data/raw/.gitkeep
 data/processed/
-chroma/
+# chroma/   Der Index liegt bewusst im Repo, damit das Image ohne Zusatzschritt
+#           antwortfaehig ist und der CI-Build durchlaeuft. 2.9 MB, Quellen oeffentlich.
 *.sqlite3
+# Ausnahme: die Index-Datenbank gehoert ins Repo
+!chroma/chroma.sqlite3
 
 # OS / Editor
 .DS_Store
