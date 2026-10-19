@@ -7,7 +7,7 @@ on:                                       # WANN
   workflow_dispatch:                      # dazu ein Knopf zum Starten von Hand
 
 jobs:
-  pruefen:                                # der interne Name des Jobs, frei waehlbar
+  pruefen:                                # Job 1, der interne Name ist frei waehlbar
     name: Lint und Tests                  # das, was du auf GitHub lesen wirst
     runs-on: ubuntu-latest                # WO, eine frische Ubuntu-Maschine von GitHub
 
@@ -21,11 +21,11 @@ jobs:
           version: "0.5.11"               # dieselbe Version wie im Dockerfile
 
       - name: Python bereitstellen
-        run: uv python install 3.12       # der Runner bringt zwar Python mit, aber nicht deine Version
+        run: uv python install 3.12       # der Runner bringt Python mit, aber nicht deine Version
 
       - name: Abhaengigkeiten installieren
-        run: uv sync --frozen             # --frozen heisst: genau uv.lock, nichts aufloesen
-         # ohne --no-dev, denn ruff und pytest werden hier gebraucht
+        run: uv sync --frozen             # genau uv.lock, nichts aufloesen
+                                          # ohne --no-dev, denn ruff und pytest braucht es hier
 
       - name: Formvorgaben pruefen
         run: uv run ruff check .          # Exit-Code 1 bei einem Verstoss, dann ist der Job rot
@@ -33,14 +33,14 @@ jobs:
       - name: Tests laufen lassen
         run: uv run pytest -q             # 17 laufen, 3 werden uebersprungen, Korpus fehlt
 
-    bauen:
-      name: Image bauen
-      runs-on: ubuntu-latest
+  bauen:                                  # Job 2, gleiche Einrueckung wie pruefen, laeuft parallel
+    name: Image bauen
+    runs-on: ubuntu-latest                # eine zweite, eigene Maschine
 
-      steps:
-        - name: Repository holen
-          uses: actions/checkout@v5        # v5 statt v4, die Node-Warnung von vorhin
+    steps:
+      - name: Repository holen
+        uses: actions/checkout@v5         # auch diese Maschine ist leer und braucht den Code
 
-        - name: Image bauen
-          run: docker build -t hrpa:ci .   # der Punkt ist der Build-Kontext, wie bei dir lokal
-          # kein push, das Image bleibt auf dem Runner und wird geloescht
+      - name: Image bauen
+        run: docker build -t hrpa:ci .    # der Punkt ist der Build-Kontext, wie bei dir lokal
+                                          # kein push, das Image wird mit dem Runner geloescht
