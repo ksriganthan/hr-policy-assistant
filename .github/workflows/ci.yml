@@ -1,0 +1,34 @@
+name: CI                                  # steht spaeter als Ueberschrift im Reiter Actions
+
+on:                                       # WANN
+  push:
+    branches: [main]                      # jeder Push auf main
+  pull_request:                           # und jeder Pull Request, egal von welchem Zweig
+  workflow_dispatch:                      # dazu ein Knopf zum Starten von Hand
+
+jobs:
+  pruefen:                                # der interne Name des Jobs, frei waehlbar
+    name: Lint und Tests                  # das, was du auf GitHub lesen wirst
+    runs-on: ubuntu-latest                # WO, eine frische Ubuntu-Maschine von GitHub
+
+    steps:                                # WAS, von oben nach unten
+      - name: Repository holen
+        uses: actions/checkout@v4         # klont dein Repo auf den Runner, sonst ist er leer
+
+      - name: uv installieren
+        uses: astral-sh/setup-uv@v5       # fertiger Baustein von den uv-Leuten
+        with:
+          version: "0.5.11"               # dieselbe Version wie im Dockerfile
+
+      - name: Python bereitstellen
+        run: uv python install 3.12       # der Runner bringt zwar Python mit, aber nicht deine Version
+
+      - name: Abhaengigkeiten installieren
+        run: uv sync --frozen             # --frozen heisst: genau uv.lock, nichts aufloesen
+         # ohne --no-dev, denn ruff und pytest werden hier gebraucht
+
+      - name: Formvorgaben pruefen
+        run: uv run ruff check .          # Exit-Code 1 bei einem Verstoss, dann ist der Job rot
+
+      - name: Tests laufen lassen
+        run: uv run pytest -q             # 17 laufen, 3 werden uebersprungen, Korpus fehlt
