@@ -4,7 +4,7 @@ import os
 
 import chromadb
 
-from hr_policy_assistant.gateway.llm import embed, frage_modell
+from hr_policy_assistant.gateway.llm import EMBEDDING_MODELL, embed, frage_modell
 from hr_policy_assistant.ingestion.index import CHROMA_PFAD, SAMMLUNG
 from hr_policy_assistant.modelle import Auskunft
 
@@ -45,10 +45,23 @@ _sammlung = None                                 # Unterstrich heisst, das geht 
 
 
 def hole_sammlung():
-    """Oeffnet die Chroma-Sammlung beim ersten Aufruf und merkt sie sich danach."""
+    """Oeffnet die Chroma-Sammlung beim ersten Aufruf und merkt sie sich danach.
+
+    Prueft dabei, ob der Index mit demselben Embedding-Modell gebaut wurde, das
+    jetzt eingestellt ist. Ohne diese Pruefung liefert Chroma auch bei einem
+    fremden Modell vier Treffer zurueck, nur sind sie inhaltlich zufaellig. Es
+    stuerzt nichts ab, die Belegstellen passen einfach nicht zur Frage.
+    """
     global _sammlung                             # ohne global entstuende hier eine neue lokale Variable
     if _sammlung is None:                        # beim zweiten Aufruf steht sie schon bereit
-        _sammlung = chromadb.PersistentClient(path=str(CHROMA_PFAD)).get_collection(SAMMLUNG)
+        sammlung = chromadb.PersistentClient(path=str(CHROMA_PFAD)).get_collection(SAMMLUNG)
+        gebaut_mit = (sammlung.metadata or {}).get("embedding_modell")   # in index.py an die Sammlung geschrieben
+        if gebaut_mit != EMBEDDING_MODELL:
+            raise RuntimeError(                  # lieber ein Fehler beim Start als falsche Belege im Betrieb
+                f"Der Index unter {CHROMA_PFAD} wurde mit '{gebaut_mit}' gebaut, "
+                f"eingestellt ist '{EMBEDDING_MODELL}'. Index neu bauen oder Modell zuruecksetzen."
+            )
+        _sammlung = sammlung                     # erst zuweisen, wenn die Pruefung durch ist
     return _sammlung
 
 

@@ -31,8 +31,9 @@ solche erkennbar ist.
 - Tabellen werden zeilenweise in Satzform gelesen, jeder Wert trägt seine Spaltenbezeichnung
 - Einbettung lokal über Ollama mit `bge-m3`
 - Chroma-Sammlung `hr_policy` mit Kosinus-Abstand, 211 Chunks. Das Embedding-Modell steht als
-  Metadatum an der Sammlung, damit beim Lesen nachvollziehbar ist, womit eingebettet wurde.
-  Eine Prüfung beim Öffnen gibt es heute nicht, sie wäre die natürliche Ergänzung
+  Metadatum an der Sammlung. `hole_sammlung()` vergleicht es beim Öffnen mit dem eingestellten
+  Modell und bricht bei Abweichung ab. Ohne diese Prüfung liefert Chroma auch mit einem fremden
+  Modell vier Treffer, nur sind sie inhaltlich zufällig, und nichts stürzt ab
 - Metadaten an jedem Chunk, darunter Dokument, Ziffer, Seite, Titel, Pfad, Stand und Aktualitätsstatus
 - LLM-Gateway für alle Ollama-Aufrufe, Chat und Embedding. Jeder Aufruf wird als JSON-Zeile
   protokolliert, bei Verbindungsfehlern in insgesamt bis zu drei Versuchen mit wachsender Pause
@@ -103,13 +104,14 @@ Entscheide, keine Lücken. Jeder Punkt war möglich und ist aus einem Grund unte
   steht auf `unbekannt`. Die Daten dafür liegen an jedem Chunk, die Regel fehlt
 - **Tests für die Prüfregeln und für die Schnittstelle.** Loader und Textbereinigung sind
   getestet, `pruefung.py` und die Endpunkte nicht
+- GitHub-Actions-CI mit zwei Jobs. Form, Tests und Eval-Gate im einen, der Docker-Build im
+  anderen, siehe «Die CI»
 
 ### Fehlt noch
 
 - Ein verlässlicher Kritiker. Der Knoten steht, hat die bekannte Halluzination gefangen und ist
   seit dem 18.09. und dem 15.10. zweimal nachgebessert worden. Seine Trefferquote liegt trotzdem
   bei rund einem Fünftel, siehe «Was der Kritiker nicht kann»
-- GitHub-Actions-CI mit Test- und Eval-Gate
 
 ### Prüfskripte im Wurzelverzeichnis
 
@@ -686,6 +688,76 @@ der Index, dann der Code. Eine geänderte Schicht macht alle darunter ungültig,
 teure Installation beim Ändern einer Codezeile im Cache. Gemessen 9.2 Sekunden beim ersten Bau
 gegen 0.0 beim zweiten.
 
+## Die CI
+
+`.github/workflows/ci.yml`, gebaut am 19.10.2026. Ausgelöst bei jedem Push auf `main`, bei jedem
+Pull Request und von Hand über `workflow_dispatch`.
+
+**Zwei Jobs, die gleichzeitig auf getrennten Maschinen laufen.**
+
+| Job | Was er prüft | Dauer |
+|---|---|---|
+| Lint und Tests | `ruff check`, `pytest`, Eval-Gate | 16 s |
+| Image bauen | `docker build`, ohne Push | 30 s |
+
+Die Reihenfolge in der Datei sagt nichts über die Ausführung. Es gibt kein `needs`, weil ein
+unbenutzter Import nichts darüber aussagt, ob das Dockerfile baut. Beide Antworten sind auch dann
+nützlich, wenn eine davon rot ist.
+
+`uv sync --frozen` statt `uv sync`. Der Runner nimmt damit genau die Versionen aus `uv.lock` und
+löst nicht neu auf. Wird der Lauf rot, liegt es an einer Änderung im Repository und nicht daran,
+dass irgendwo eine neue Paketversion erschienen ist.
+
+**Caching wurde geprüft und bewusst weggelassen.** `uv sync` dauert auf dem Runner zwei Sekunden,
+und `astral-sh/setup-uv` legt bereits selbst einen Cache an. Ein eigener Cache-Schritt würde hier
+nichts einsparen.
+
+### Das Eval-Gate
+
+Der vierte Schritt im Job «Lint und Tests». Er liest die jüngste Graph-CSV aus
+`evals/ergebnisse/`, zählt drei Kennzahlen aus und beendet sich mit 0 oder 1.
+
+| Kennzahl | Schwelle |
+|---|---|
+| Pflichtbegriffe vollständig | mindestens 0.70 |
+| `frage_beantwortet` richtig | mindestens 0.90 |
+| Verbotstreffer | höchstens 8 |
+
+Die Schwellen sind am 19.10.2026 vorab festgelegt und liegen knapp unter dem damals gemessenen
+Stand. Sie fangen Rückschritt, nicht Rauschen. **Eine Schwelle wird nicht nachträglich gesenkt,
+um einen roten Lauf grün zu machen.**
+
+**Das Gate misst nicht selbst.** Es liest ab, was der Eval-Lauf gemessen hat. Der Lauf braucht
+Ollama, ein Modell von rund neun Gigabyte und eine Grafikkarte, der Runner hat nichts davon. Das
+Ablesen braucht nur eine Textdatei und läuft in einer Zehntelsekunde.
+
+### Herkunftsprüfung
+
+Ohne eine zweite Prüfung wäre das Gate wertlos. Es würde die Messung von gestern bewachen und
+grün bleiben, während sich der Code darunter ändert.
+
+`evals/herkunft.py` rechnet darum einen SHA-256 über die acht Dateien, die das Ergebnis
+beeinflussen können, und zwar `auskunft.py`, `modelle.py`, `pruefung.py`, `gateway/llm.py`,
+`workflow/graph.py`, `workflow/agent.py`, `evals/lauf.py` und `evals/faelle.yaml`. Der Eval-Lauf
+legt diesen Abdruck als Datei mit der Endung `.herkunft` neben die CSV. Das Gate rechnet ihn neu
+und vergleicht.
+
+Nicht enthalten sind README, Dockerfile, Oberfläche und API-Routen, weil sie die Antworten nicht
+verändern. `gate.py` selbst ist ebenfalls nicht enthalten, sonst würde jede Änderung am Gate die
+eigene Grundlage ungültig machen.
+
+**Zwei Grenzen, beide bekannt.** Erstens vergleicht die Prüfung Bytes, nicht Bedeutung. Eine
+Änderung, die an den Antworten nichts ändert, schliesst das Gate trotzdem, und es muss neu
+gemessen werden. Das ist die gewählte Richtung, lieber einmal zu viel als einmal zu wenig.
+Zweitens steht die Liste der acht Dateien in `herkunft.py`, und diese Datei steht nicht in ihrer
+eigenen Liste. Wer eine Datei aus der Überwachung nimmt, ändert den Abdruck damit nicht.
+
+### Was die CI nicht prüft
+
+Sie startet den Container nicht und fragt kein Modell. Ob das Image nach dem Bauen auch antwortet,
+steht nicht fest. Dafür müsste der Runner den Container hochfahren und `/gesund` abfragen, und
+spätestens beim Modell wäre Schluss.
+
 ## Ausrollen, der Entwurf
 
 Nicht gebaut, und hier steht, warum und wie es aussähe.
@@ -844,7 +916,7 @@ Differenzen von einer Einheit in den übrigen Spalten etwas bedeuten, ist offen,
 Einschränkung zur Reproduzierbarkeit weiter oben. Die Zeile steht hier mit dieser Einschränkung
 und nicht als Fortschrittsmeldung.
 
-### Workflow gegen Agent-Loop, 25.09.2026
+### Workflow gegen Agent-Loop, 25.09.2026, vor dem Kritiker-Fix
 
 Beide auf `qwen2.5:14b`, dasselbe Eval-Set, dieselben zwanzig Fälle. Der Graph wurde auf diesem
 Modell eigens nachgemessen, damit der Vergleich zwei Steuerungen misst und nicht zwei Modelle.
@@ -871,6 +943,37 @@ Ablaufs, der im Code steht statt bei jedem Schritt neu entschieden zu werden.
 **Die Grenze dieses Ergebnisses.** Es gilt für eine Aufgabe mit immer gleicher Schrittfolge,
 nämlich eine Frage an zwei feste Dokumente. Dort ist Flexibilität wertlos. Bei einer Aufgabe,
 deren Schritte vorher nicht feststehen, kippt das Urteil, und dann verliert der Graph.
+
+### Stand 20.10.2026, und was zwei Läufe über das Rauschen sagen
+
+Nach dem Kritiker-Fix vom 15.10. wurde zweimal gemessen, am 19.10. und am 20.10. Zwischen beiden
+Läufen hat sich am Antwortverhalten nichts geändert, dazwischen liegt nur die Prüfung des
+Embedding-Modells beim Öffnen des Index.
+
+| Kennzahl | 25.09. | 19.10. | 20.10. |
+|---|---|---|---|
+| Ziffer getroffen | 28/31 | 28/31 | 28/31 |
+| `frage_beantwortet` stimmt | 38/40 | 37/40 | 37/40 |
+| Pflichtbegriffe vollständig | 31/40 | 31/40 | 32/40 |
+| Verbotsbegriffe, keiner gefunden | 33/40 | 33/40 | 33/40 |
+| Strukturmängel | 0 | 0 | 0 |
+| Fälle mit zweiter Runde | 9 | 7 | 7 |
+| Am Ende nicht gedeckt | 8 | 4 | 4 |
+| Tokens ein / aus | 157950 / 10372 | 112077 / 8371 | 112136 / 8614 |
+| Dauer p50 / p95 | 51.0 s / 122.9 s | 46.3 s / 105.0 s | 49.4 s / 115.0 s |
+
+**Der Kritiker-Fix hat die Antworten nicht besser gemacht.** Pflichtbegriffe und Verbotsbegriffe
+stehen vor und nach dem Fix gleich. Was er gesenkt hat, ist der Aufwand, nämlich 29 Prozent
+weniger Eingabe-Tokens und rund 15 Prozent kürzere p95. Und die Zahl «am Ende nicht gedeckt» ist
+von acht auf vier gefallen, der Kritiker beanstandet also halb so oft fälschlich.
+
+Das ist die ehrliche Lesart. Der Fehler hat nie falsche Antworten erzeugt, sondern unnötige
+Modellaufrufe und falschen Alarm.
+
+**Zwei Läufe desselben Codes geben eine Vorstellung vom Rauschen.** Pflichtbegriffe schwanken um
+eins, p50 um drei Sekunden, p95 um zehn. Das ist die Begründung dafür, dass die Schwelle im
+Eval-Gate bei 0.70 steht und nicht bei den gemessenen 0.78. Eine Schwelle am gemessenen Wert
+würde beim nächsten Lauf durch Zufall reissen.
 
 Aus Woche 1 zusätzlich die Retrieval-Precision, an fünf Testfragen von Hand beurteilt, k=2
 gleich 1.0 und k=4 zwischen 0.6 und 0.7. Fünf Fragen sind eine kleine Stichprobe, die Zahl ist
